@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import List
-from llm import embed_query
+from app.llm import embed_query
 from store.storage import VectorStore, StoredChunk
 
 @dataclass

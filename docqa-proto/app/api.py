@@ -1,11 +1,11 @@
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from ingest.pdf_loader import load_pdf
 from ingest.docx_loader import load_docx
 from ingest.txt_loader import load_txt
 from ingest.chunker import make_chunks, Chunk
-from llm import embed_texts
+from app.llm import embed_texts
 from store.storage import VectorStore, StoredChunk
 from app.models import IngestResult, ProofSpan
 
@@ -15,7 +15,7 @@ def _detect_loader(path: str):
     if ext in [".docx"]: return load_docx
     return load_txt
 
-def ingest_document(path: str, store: VectorStore | None = None) -> IngestResult:
+def ingest_document(path: str, store: Optional[VectorStore] = None) -> IngestResult:
     store = store or VectorStore()
     pages = _detect_loader(path)(path)
     doc_id = uuid.uuid4().hex[:12]
@@ -39,7 +39,7 @@ def ingest_document(path: str, store: VectorStore | None = None) -> IngestResult
     store.add_chunks(stored, vectors)
     return IngestResult(doc_id=doc_id, num_chunks=len(chunks))
 
-def retrieve_with_proofs(question: str, k: int = 5, store: VectorStore | None = None) -> List[ProofSpan]:
+def retrieve_with_proofs(question: str, k: int = 5, store: Optional[VectorStore] = None) -> List[ProofSpan]:
     from app.retriever import Retriever
     store = store or VectorStore()
     hits = Retriever(store, k=k).search(question)

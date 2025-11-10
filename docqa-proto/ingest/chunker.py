@@ -22,7 +22,7 @@ def _split_paras(text: str) -> List[str]:
     return paras
 
 def make_chunks(doc_id: str, pages: List[Dict[str, Any]],
-                target_chars: int = 900, overlap: int = 120) -> List[Chunk]:
+                target_chars: int = 500, overlap: int = 100) -> List[Chunk]:
     chunks: List[Chunk] = []
     for page_obj in pages:
         page = int(page_obj["page"])

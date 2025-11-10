@@ -1,10 +1,16 @@
 from typing import List
 import numpy as np
-from openai import OpenAI
-from utils import getenv
+from app.utils import getenv
 
 _client = None
-def client() -> OpenAI:
+def client():
+    # Lazy import to avoid hard dependency during unrelated code paths.
+    try:
+        from openai import OpenAI  # type: ignore
+    except Exception as exc:
+        raise ImportError(
+            "OpenAI SDK is required but not installed. Install it with 'pip install openai'."
+        ) from exc
     global _client
     if _client is None:
         _client = OpenAI(api_key=getenv("OPENAI_API_KEY"))

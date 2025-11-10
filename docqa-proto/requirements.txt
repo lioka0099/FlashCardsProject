@@ -1,0 +1,9 @@
+flask
+python-dotenv
+pydantic
+openai>=1.57.0
+PyMuPDF
+python-docx
+numpy
+pandas
+uvicorn

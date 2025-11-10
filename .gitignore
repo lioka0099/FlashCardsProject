@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# Virtual environments
+.venv/
+.env
+.env.*
+
+# Local files
+app.db
+uploads/
+
+# OS/IDE
+.DS_Store
+.vscode/
+.idea/

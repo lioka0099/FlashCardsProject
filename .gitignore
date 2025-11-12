@@ -14,6 +14,12 @@ __pycache__/
 app.db
 uploads/
 
+# Project artifacts
+docqa-proto/store/faiss.index
+docqa-proto/store/meta.sqlite
+docqa-proto/samples/
+docqa-proto/uploads/
+
 # OS/IDE
 .DS_Store
 .vscode/

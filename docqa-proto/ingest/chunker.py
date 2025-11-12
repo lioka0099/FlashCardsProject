@@ -8,26 +8,64 @@ class Chunk(TypedDict):
     start: int
     end: int
 
-def _split_paras(text: str) -> List[str]:
+def _split_long_text(text: str, max_len: int) -> List[str]:
+    segments: List[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        end = min(n, i + max_len)
+        if end < n:
+            cut = text.rfind(" ", i, end)
+            if cut == -1 or cut <= i + max_len // 3:
+                cut = end
+        else:
+            cut = end
+        segment = text[i:cut].strip()
+        if segment:
+            segments.append(segment)
+        i = cut
+        while i < n and text[i].isspace():
+            i += 1
+    return segments or [text[:max_len]]
+
+def _split_paras(text: str, max_len: int) -> List[str]:
     raw = [p.strip() for p in text.split("\n") if p.strip()]
     paras: List[str] = []
-    buf = []
+    buf: List[str] = []
     for p in raw:
-        if len(p) < 300:
+        if len(p) < min(300, max_len):
             buf.append(p)
+            continue
+        if buf:
+            joined = " ".join(buf).strip()
+            if joined:
+                if len(joined) > max_len:
+                    paras.extend(_split_long_text(joined, max_len))
+                else:
+                    paras.append(joined)
+            buf = []
+        if len(p) > max_len:
+            paras.extend(_split_long_text(p, max_len))
         else:
-            if buf: paras.append(" ".join(buf)); buf = []
             paras.append(p)
-    if buf: paras.append(" ".join(buf))
+    if buf:
+        joined = " ".join(buf).strip()
+        if joined:
+            if len(joined) > max_len:
+                paras.extend(_split_long_text(joined, max_len))
+            else:
+                paras.append(joined)
+    if not paras and raw:
+        for piece in _split_long_text(" ".join(raw), max_len):
+            paras.append(piece)
     return paras
 
 def make_chunks(doc_id: str, pages: List[Dict[str, Any]],
-                target_chars: int = 500, overlap: int = 100) -> List[Chunk]:
+                target_chars: int = 600, overlap: int = 120) -> List[Chunk]:
     chunks: List[Chunk] = []
     for page_obj in pages:
         page = int(page_obj["page"])
         text = page_obj["text"] or ""
-        paras = _split_paras(text)
+        paras = _split_paras(text, max_len=max(200, target_chars))
 
         # accumulate into windows near target_chars
         cursor = 0

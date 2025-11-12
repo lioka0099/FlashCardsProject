@@ -23,7 +23,8 @@ def ingest_document(path: str, store: Optional[VectorStore] = None) -> IngestRes
                        title=Path(path).name, info={"pages": len(pages)})
 
     # chunk
-    chunks: List[Chunk] = make_chunks(doc_id, pages, target_chars=900, overlap=120)
+    # Slightly larger chunks and overlap improve coherence and recall
+    chunks: List[Chunk] = make_chunks(doc_id, pages, target_chars=900, overlap=200)
 
     # embed
     vectors = embed_texts([c["text"] for c in chunks])
@@ -42,7 +43,18 @@ def ingest_document(path: str, store: Optional[VectorStore] = None) -> IngestRes
 def retrieve_with_proofs(question: str, k: int = 5, store: Optional[VectorStore] = None) -> List[ProofSpan]:
     from app.retriever import Retriever
     store = store or VectorStore()
-    hits = Retriever(store, k=k).search(question)
+    # Use the smarter pipeline by default
+    hits = Retriever(store, k=k).search_smart(question, k=k)
+    return [ProofSpan(
+        doc_id=h.chunk.doc_id, page=h.chunk.page, start=h.chunk.start,
+        end=h.chunk.end, text=h.chunk.text[:500], score=h.score
+    ) for h in hits]
+
+def retrieve_with_proofs_for_doc(question: str, doc_id: str, k: int = 5, store: Optional[VectorStore] = None) -> List[ProofSpan]:
+    from app.retriever import Retriever
+    store = store or VectorStore()
+    hits = Retriever(store, k=k).search_smart(question, k=k)
+    hits = [h for h in hits if h.chunk.doc_id == doc_id]
     return [ProofSpan(
         doc_id=h.chunk.doc_id, page=h.chunk.page, start=h.chunk.start,
         end=h.chunk.end, text=h.chunk.text[:500], score=h.score

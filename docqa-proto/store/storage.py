@@ -160,3 +160,22 @@ class VectorStore:
             c = StoredChunk(*row)
             out.append((c, float(score)))
         return out
+
+    # ------ doc helpers ------
+    def list_chunks_by_doc(self, doc_id: str) -> List[StoredChunk]:
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT chunk_id, doc_id, page, start, end, text FROM chunks WHERE doc_id=? ORDER BY page, start",
+            (doc_id,))
+        rows = cur.fetchall()
+        return [StoredChunk(*row) for row in rows]
+
+    def sample_chunks_by_doc(self, doc_id: str, n: int = 20) -> List[StoredChunk]:
+        import random
+        chunks = self.list_chunks_by_doc(doc_id)
+        if len(chunks) <= n:
+            return chunks
+        idxs = list(range(len(chunks)))
+        random.shuffle(idxs)
+        return [chunks[i] for i in idxs[:n]]
+

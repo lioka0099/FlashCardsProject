@@ -47,7 +47,7 @@ def retrieve_with_proofs(question: str, k: int = 5, store: Optional[VectorStore]
     hits = Retriever(store, k=k).search_smart(question, k=k)
     return [ProofSpan(
         doc_id=h.chunk.doc_id, page=h.chunk.page, start=h.chunk.start,
-        end=h.chunk.end, text=h.chunk.text[:500], score=h.score
+        end=h.chunk.end, text=h.chunk.text, score=h.score
     ) for h in hits]
 
 def retrieve_with_proofs_for_doc(question: str, doc_id: str, k: int = 5, store: Optional[VectorStore] = None) -> List[ProofSpan]:
@@ -57,5 +57,5 @@ def retrieve_with_proofs_for_doc(question: str, doc_id: str, k: int = 5, store: 
     hits = [h for h in hits if h.chunk.doc_id == doc_id]
     return [ProofSpan(
         doc_id=h.chunk.doc_id, page=h.chunk.page, start=h.chunk.start,
-        end=h.chunk.end, text=h.chunk.text[:500], score=h.score
+        end=h.chunk.end, text=h.chunk.text, score=h.score
     ) for h in hits]

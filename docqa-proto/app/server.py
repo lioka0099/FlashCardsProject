@@ -30,6 +30,6 @@ async def ask_endpoint(question: str = Form(...), k: int = Form(5), min_score: f
     # Format proofs for response (short text)
     proofs = [{
         "doc_id": p.doc_id, "page": p.page, "score": p.score,
-        "start": p.start, "end": p.end, "text": p.text[:300] + ("..." if len(p.text) > 300 else "")
+        "start": p.start, "end": p.end, "text": p.text.strip()
     } for p in ans.proofs]
     return JSONResponse({"ok": True, "answer": ans.answer, "proofs": proofs})

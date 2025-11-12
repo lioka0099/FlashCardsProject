@@ -249,8 +249,11 @@ def _format_report(items: List[QAItem]) -> str:
         lines.append("Proofs:")
         for j, p in enumerate(it["proofs"], 1):
             lines.append(f"- S{j} | doc={p['doc_id']} page={p['page']} score={p['score']:.2f}")
-            preview = p["text"][:300] + ("..." if len(p["text"]) > 300 else "")
-            lines.append(f"  {preview}")
+            text = " ".join((p.get("text") or "").split())
+            if text:
+                lines.append(f'  "{text}"')
+            else:
+                lines.append("  (no proof text)")
         lines.append("")
     return "\n".join(lines).strip()
 

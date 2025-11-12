@@ -32,7 +32,8 @@ def main():
         print("\n=== PROOFS ===\n")
         for i, p in enumerate(ans.proofs, 1):
             print(f"S{i} | doc={p.doc_id} page={p.page} score={p.score:.2f}")
-            print(p.text[:300] + ("..." if len(p.text) > 300 else ""))
+            text = " ".join(p.text.split())
+            print(f"\"{text}\"")
             print()
 
 if __name__ == "__main__":

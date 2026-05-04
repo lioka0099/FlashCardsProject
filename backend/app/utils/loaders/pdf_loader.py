@@ -8,25 +8,11 @@ class Page(TypedDict):
 def load_pdf(path: Union[str, Path]) -> List[Page]:
     """
     Robust PDF text extraction:
-    1) Try PyMuPDF (fitz) for better layout fidelity
-    2) Fallback to pdfminer.six
-    3) Fallback to PyPDF
+    1) Try pdfminer.six
+    2) Try PyPDF
+    3) Fallback to PyMuPDF (fitz) for better layout fidelity
     """
-    # 1) Try PyMuPDF
-    try:
-        import fitz  # type: ignore
-        pages: List[Page] = []
-        with fitz.open(str(path)) as doc:
-            for i in range(len(doc)):
-                page = doc.load_page(i)
-                text = page.get_text("text") or ""
-                pages.append({"page": i + 1, "text": text})
-        if any(p["text"].strip() for p in pages):
-            return pages
-    except Exception:
-        pass
-
-    # 2) Try pdfminer.six
+    # 1) Try pdfminer.six
     try:
         from pdfminer.high_level import extract_text  # type: ignore
         # pdfminer extracts whole doc; we split by form feed which often denotes pages
@@ -40,15 +26,32 @@ def load_pdf(path: Union[str, Path]) -> List[Page]:
     except Exception:
         pass
 
-    # 3) Fallback to PyPDF
+    # 2) Try PyPDF before PyMuPDF because PyMuPDF can segfault on some PDFs.
     try:
         from pypdf import PdfReader  # type: ignore
         reader = PdfReader(str(path))
         pages: List[Page] = []
         for i, p in enumerate(reader.pages, start=1):
             pages.append({"page": i, "text": p.extract_text() or ""})
-        return pages
-    except Exception as exc:
-        raise ImportError(
-            "No PDF extractors available. Install one of: 'pip install pymupdf' or 'pip install pdfminer.six' or 'pip install pypdf'."
-        ) from exc
+        if pages:
+            return pages
+    except Exception:
+        pass
+
+    # 3) Try PyMuPDF
+    try:
+        import fitz  # type: ignore
+        pages: List[Page] = []
+        with fitz.open(str(path)) as doc:
+            for i in range(len(doc)):
+                page = doc.load_page(i)
+                text = page.get_text("text") or ""
+                pages.append({"page": i + 1, "text": text})
+        if any(p["text"].strip() for p in pages):
+            return pages
+    except Exception:
+        pass
+
+    raise ImportError(
+        "No PDF extractors available. Install one of: 'pip install pdfminer.six' or 'pip install pypdf' or 'pip install pymupdf'."
+    )

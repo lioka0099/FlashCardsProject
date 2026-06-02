@@ -129,7 +129,7 @@ class CardResponse(BaseModel):
     topic_label: Optional[str] = None
     question: str
     answer: str
-    difficulty: int = Field(..., ge=1, le=5, description="Bloom's taxonomy level (1-5)")
+    difficulty: int = Field(..., ge=1, le=5, description="Difficulty level; framework is in info.difficulty_framework")
     created_at: str
     status: str = Field(default="active", description="Card status: 'active' or 'archived'")
     proofs: List[ProofSpan] = Field(default_factory=list)
@@ -141,7 +141,7 @@ class GenerateStarterCardsRequest(BaseModel):
     # exam_id is a path parameter: POST /exams/{exam_id}/cards/generate
     user_id: str = Field(..., description="User ID")
     n: int = Field(default=5, ge=1, le=50, description="Number of cards to generate")
-    difficulty: int = Field(default=1, ge=1, le=5, description="Bloom's taxonomy difficulty level")
+    difficulty: int = Field(default=1, ge=1, le=5, description="Target difficulty level; framework is selected by card route")
 
 
 class GenerateStarterCardsResponse(BaseModel):
@@ -156,7 +156,7 @@ class GenerateSingleCardRequest(BaseModel):
     """Request to generate a single card for a topic."""
     # exam_id and topic_id are path parameters: POST /exams/{exam_id}/topics/{topic_id}/cards/generate
     user_id: str = Field(..., description="User ID")
-    difficulty: int = Field(default=1, ge=1, le=5, description="Bloom's taxonomy difficulty level")
+    difficulty: int = Field(default=1, ge=1, le=5, description="Target difficulty level; framework is selected by card route")
 
 
 class GenerateSingleCardResponse(BaseModel):

@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from app.data.db_repository import DBRepository, StoredCard, StoredCardPresentation
+from app.services.diagnostic_coverage import all_topics_diagnosed, diagnosed_topic_ids
 
 
 @dataclass
@@ -51,11 +52,14 @@ class SessionPlannerService:
                     reason="diagnostic",
                     topic_id=self._card_topic_id(chosen),
                 )
-            self.repo.update_exam_lifecycle(
-                exam_id=exam_id,
-                state="active_learning",
-                diagnostic_completed_at=now_dt,
-            )
+            if all_topics_diagnosed(repo=self.repo, user_id=user_id, exam_id=exam_id):
+                self.repo.update_exam_lifecycle(
+                    exam_id=exam_id,
+                    state="active_learning",
+                    diagnostic_completed_at=now_dt,
+                )
+            else:
+                return None
 
         overdue = self._build_overdue_queue(user_id=user_id, exam_id=exam_id, now=now_dt)
         chosen = self._choose_with_topic_fairness(
@@ -66,7 +70,7 @@ class SessionPlannerService:
         if chosen is not None:
             return PlannedCard(card_id=chosen.card_id, reason="overdue", topic_id=self._card_topic_id(chosen))
 
-        remediation = self._build_remediation_queue(exam_id=exam_id, now=now_dt)
+        remediation = self._build_remediation_queue(user_id=user_id, exam_id=exam_id, now=now_dt)
         chosen = self._choose_with_topic_fairness(
             candidates=remediation,
             user_id=user_id,
@@ -75,7 +79,7 @@ class SessionPlannerService:
         if chosen is not None:
             return PlannedCard(card_id=chosen.card_id, reason="remediation", topic_id=self._card_topic_id(chosen))
 
-        progression = self._build_progression_queue(exam_id=exam_id, now=now_dt)
+        progression = self._build_progression_queue(user_id=user_id, exam_id=exam_id, now=now_dt)
         chosen = self._choose_with_topic_fairness(
             candidates=progression,
             user_id=user_id,
@@ -89,6 +93,7 @@ class SessionPlannerService:
     def _build_overdue_queue(
         self, *, user_id: str, exam_id: str, now: datetime
     ) -> List[StoredCard]:
+        diagnosed = self._diagnosed_topic_ids(user_id=user_id, exam_id=exam_id)
         due = self.repo.list_due_cards(
             user_id=user_id,
             exam_id=exam_id,
@@ -102,10 +107,13 @@ class SessionPlannerService:
             card = self.repo.get_card(card_id=s.card_id)
             if card is None or card.status != "active":
                 continue
+            if self._card_topic_id(card) not in diagnosed:
+                continue
             cards.append(card)
         return cards
 
-    def _build_remediation_queue(self, *, exam_id: str, now: datetime) -> List[StoredCard]:
+    def _build_remediation_queue(self, *, user_id: str, exam_id: str, now: datetime) -> List[StoredCard]:
+        diagnosed = self._diagnosed_topic_ids(user_id=user_id, exam_id=exam_id)
         rows = self.repo.list_card_scheduling_by_state(
             exam_id=exam_id,
             state="relearning",
@@ -118,16 +126,21 @@ class SessionPlannerService:
             card = self.repo.get_card(card_id=s.card_id)
             if card is None or card.status != "active":
                 continue
+            if self._card_topic_id(card) not in diagnosed:
+                continue
             cards.append(card)
         return cards
 
-    def _build_progression_queue(self, *, exam_id: str, now: datetime) -> List[StoredCard]:
+    def _build_progression_queue(self, *, user_id: str, exam_id: str, now: datetime) -> List[StoredCard]:
+        diagnosed = self._diagnosed_topic_ids(user_id=user_id, exam_id=exam_id)
         cards = self.repo.list_cards_for_exam(exam_id=exam_id, limit=1000)
         out: List[StoredCard] = []
         for card in cards:
             if card.status != "active":
                 continue
             if card.card_type == "diagnostic":
+                continue
+            if self._card_topic_id(card) not in diagnosed:
                 continue
             if (card.info or {}).get("prefetch_status") == "ready":
                 continue
@@ -225,6 +238,9 @@ class SessionPlannerService:
             topic_id = self._card_topic_id(card)
             counts[topic_id] = counts.get(topic_id, 0) + 1
         return counts
+
+    def _diagnosed_topic_ids(self, *, user_id: str, exam_id: str) -> Set[str]:
+        return diagnosed_topic_ids(repo=self.repo, user_id=user_id, exam_id=exam_id)
 
     def _card_topic_id(self, card: StoredCard) -> str:
         links = self.repo.list_card_topics(card_id=card.card_id)

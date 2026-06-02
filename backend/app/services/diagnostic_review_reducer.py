@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.data.db_engine import get_db
 from app.data.db_repository import DBRepository, StoredCardTopic, StoredTopicProficiency
+from app.services.diagnostic_coverage import all_topics_diagnosed
 from app.services.diagnostic_state import DiagnosticStateService
 
 
@@ -216,7 +217,7 @@ class DiagnosticReviewReducer:
 
         state = exam.state
         diagnostic_total = int(exam.diagnostic_total or 0)
-        if diagnostic_total > 0 and diagnostic_answered >= diagnostic_total:
+        if all_topics_diagnosed(repo=self.repo, user_id=user_id, exam_id=exam_id):
             state = "active_learning"
             self.repo.update_exam_lifecycle(
                 exam_id=exam_id,

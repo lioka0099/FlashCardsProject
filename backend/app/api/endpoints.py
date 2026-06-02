@@ -332,6 +332,7 @@ async def next_card_endpoint(
 
     planner = SessionPlannerService(repo=store.db)
     generator = SessionCardGenerationService(repo=store.db)
+    generator.archive_invalid_prefetched_cards(user_id=user_id, exam_id=exam_id)
     planned = planner.plan_next_card(user_id=user_id, exam_id=exam_id)
     if planned is None:
         planned = generator.get_fresh_prefetched_card(user_id=user_id, exam_id=exam_id)

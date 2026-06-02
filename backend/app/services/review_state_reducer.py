@@ -119,6 +119,9 @@ class ReviewStateReducer:
             raise ValueError(f"Card not found: {card_id}")
         if card.exam_id != exam_id:
             raise ValueError("Card does not belong to exam")
+        card_info = card.info or {}
+        card_route = str(card_info.get("card_route") or "default")
+        difficulty_framework = str(card_info.get("difficulty_framework") or "bloom")
 
         topic_links = self.repo.list_card_topics(card_id=card_id, session=session)
         if not topic_links:
@@ -166,6 +169,8 @@ class ReviewStateReducer:
                 topic_link=link,
                 rating=rating,
                 current=current_prof,
+                card_route=card_route,
+                difficulty_framework=difficulty_framework,
             )
             self.repo.upsert_topic_proficiency(
                 user_id=prof_transition.user_id,

@@ -98,6 +98,19 @@ class ApiPlannerTests(unittest.TestCase):
             lapses=0,
             last_reviewed_at=now - timedelta(days=1),
         )
+        for topic_id in ("t1", "t2"):
+            self.repo.upsert_topic_proficiency(
+                user_id=self.user_id,
+                exam_id=self.exam_id,
+                topic_id=topic_id,
+                proficiency=0.5,
+                current_difficulty=1,
+                streak_up=0,
+                streak_down=0,
+                seen_count=1,
+                correctish_count=0,
+                info={},
+            )
 
     def _archive_seed_learning_cards(self) -> None:
         for card_id, topic_id, question, answer in [
@@ -157,6 +170,25 @@ class ApiPlannerTests(unittest.TestCase):
         self.assertFalse(p1["no_cards_available"])
         self.assertEqual(p1["reason"], "overdue")
         self.assertEqual(p1["card"]["card_id"], "c1")
+
+        review = self.client.post(
+            f"/exams/{self.exam_id}/cards/c1/review",
+            data={"user_id": self.user_id, "rating": "almost_knew"},
+            headers={"Idempotency-Key": "phase4-history-review-c1"},
+        )
+        self.assertEqual(review.status_code, 200)
+
+        now = datetime.now(timezone.utc)
+        self.repo.upsert_card_scheduling(
+            card_id="c2",
+            due_at=now - timedelta(minutes=1),
+            state="review",
+            interval_days=1.0,
+            ease=2.5,
+            reps=1,
+            lapses=0,
+            last_reviewed_at=now - timedelta(days=1),
+        )
 
         n2 = self.client.get(
             f"/exams/{self.exam_id}/session/next-card",
@@ -295,6 +327,19 @@ class ApiPlannerTests(unittest.TestCase):
 
     def test_diagnostic_exam_serves_unanswered_diagnostic_cards(self) -> None:
         self.repo.update_exam_lifecycle(exam_id=self.exam_id, state="diagnostic")
+        for topic_id in ("t1", "t2"):
+            self.repo.upsert_topic_proficiency(
+                user_id=self.user_id,
+                exam_id=self.exam_id,
+                topic_id=topic_id,
+                proficiency=0.5,
+                current_difficulty=1,
+                streak_up=0,
+                streak_down=0,
+                seen_count=0,
+                correctish_count=0,
+                info={},
+            )
         self.repo.upsert_card(
             card_id="d1",
             exam_id=self.exam_id,
@@ -377,6 +422,82 @@ class ApiPlannerTests(unittest.TestCase):
         self.assertIsNotNone(exam)
         assert exam is not None
         self.assertEqual(exam.state, "active_learning")
+
+    def test_diagnostic_does_not_transition_while_topics_remain_undiagnosed(self) -> None:
+        self.repo.upsert_topic(topic_id="t3", exam_id=self.exam_id, label="Topic 3")
+        self.repo.upsert_topic_proficiency(
+            user_id=self.user_id,
+            exam_id=self.exam_id,
+            topic_id="t3",
+            proficiency=0.5,
+            current_difficulty=1,
+            streak_up=0,
+            streak_down=0,
+            seen_count=0,
+            correctish_count=0,
+            info={},
+        )
+        self.repo.update_exam_lifecycle(
+            exam_id=self.exam_id,
+            state="diagnostic",
+            diagnostic_total=3,
+            diagnostic_answered=2,
+        )
+
+        def fake_generate(service, *, user_id: str, exam_id: str, store, prefetch=False):
+            self.assertEqual(user_id, self.user_id)
+            self.assertEqual(exam_id, self.exam_id)
+            self.assertFalse(prefetch)
+            service.repo.upsert_card(
+                card_id="diag-gap-1",
+                exam_id=exam_id,
+                topic_id="t3",
+                question="Gap diagnostic?",
+                answer="Gap answer",
+                difficulty=1,
+                card_type="diagnostic",
+                status="active",
+                info={},
+            )
+            service.repo.replace_card_topics(
+                card_id="diag-gap-1",
+                topics=[{"topic_id": "t3", "role": "primary", "weight": 1.0}],
+            )
+            return GeneratedSessionCard(card_id="diag-gap-1", reason="diagnostic", topic_id="t3")
+
+        with patch("app.api.endpoints.SessionCardGenerationService.generate_next_card", new=fake_generate):
+            result = self.client.get(
+                f"/exams/{self.exam_id}/session/next-card",
+                params={"user_id": self.user_id},
+            )
+
+        self.assertEqual(result.status_code, 200)
+        payload = result.json()
+        self.assertFalse(payload["no_cards_available"])
+        self.assertEqual(payload["reason"], "diagnostic")
+        self.assertEqual(payload["card"]["card_id"], "diag-gap-1")
+        exam = self.repo.get_exam(self.exam_id)
+        self.assertIsNotNone(exam)
+        assert exam is not None
+        self.assertEqual(exam.state, "diagnostic")
+
+    def test_learning_prefetch_for_undiagnosed_topic_is_not_served(self) -> None:
+        self.repo.upsert_topic(topic_id="t3", exam_id=self.exam_id, label="Topic 3")
+        self._seed_prefetched_card(card_id="prefetch-undiagnosed", topic_id="t3", generated_difficulty=1)
+
+        result = self.client.get(
+            f"/exams/{self.exam_id}/session/next-card",
+            params={"user_id": self.user_id},
+        )
+
+        self.assertEqual(result.status_code, 200)
+        payload = result.json()
+        self.assertFalse(payload["no_cards_available"])
+        self.assertNotEqual(payload["card"]["card_id"], "prefetch-undiagnosed")
+        archived = self.repo.get_card(card_id="prefetch-undiagnosed")
+        self.assertIsNotNone(archived)
+        assert archived is not None
+        self.assertEqual(archived.info.get("prefetch_status"), "stale")
 
     def test_next_card_generates_learning_card_when_planner_has_no_candidate(self) -> None:
         self._archive_seed_learning_cards()

@@ -15,6 +15,7 @@ from app.services.exams import load_exam
 from app.services.llm import CHAT_MODEL_FAST, chat_completions_create
 from app.utils.vectors import l2_normalize
 from app.services.context_packs import build_representative_chunk_pack
+from app.services.card_routing import classify_topic_route
 
 try:
     import hdbscan  # type: ignore
@@ -824,6 +825,22 @@ def build_topics_for_exam(
             "merge_sims": merged.get("merge_sims", []),
             "merge_threshold": float(merge_threshold),
         }
+        try:
+            route_context = build_representative_chunk_pack(
+                store=store,
+                chunk_ids=cids,
+                centroid=merged.get("centroid"),
+                Xn=Xn,
+                id_to_row=id_to_row,
+                chunk_by_id=chunk_by_id,
+            )
+            route_decision = classify_topic_route(
+                topic_label=label,
+                representative_context=route_context or "\n".join(texts[:4]),
+            )
+            info["route_candidate"] = route_decision.to_info()
+        except Exception:
+            pass
         built.append(
             BuiltTopic(
                 topic_id=topic_id,

@@ -5,6 +5,13 @@ from datetime import datetime, timezone
 from typing import Dict, Optional
 
 from app.data.db_repository import StoredCardTopic, StoredTopicProficiency
+from app.services.difficulty_frameworks import clamp_difficulty, framework_for_route
+from app.services.topic_route_proficiency import (
+    default_route_state,
+    merge_route_state,
+    normalize_route,
+    route_state_from_info,
+)
 
 
 @dataclass
@@ -81,6 +88,8 @@ class TopicProficiencyStateService:
         topic_link: StoredCardTopic,
         rating: str,
         current: Optional[StoredTopicProficiency],
+        card_route: str = "default",
+        difficulty_framework: Optional[str] = None,
     ) -> TopicProficiencyTransition:
         if rating not in self._RATING_DELTA:
             raise ValueError(f"Unsupported rating: {rating}")
@@ -97,44 +106,97 @@ class TopicProficiencyStateService:
         else:
             weight = max(0.0, min(0.6, weight))
 
-        delta = self._RATING_DELTA[rating] * weight
-        new_proficiency = max(0.0, min(1.0, base.proficiency + delta))
+        route = normalize_route(card_route)
+        framework = difficulty_framework or framework_for_route(route)
+        default_fallback = default_route_state(
+            card_route="default",
+            proficiency=base.proficiency,
+            current_difficulty=base.current_difficulty,
+            streak_up=base.streak_up,
+            streak_down=base.streak_down,
+            seen_count=base.seen_count,
+            correctish_count=base.correctish_count,
+        )
+        route_fallback = (
+            default_fallback
+            if route == "default"
+            else default_route_state(card_route=route, current_difficulty=1)
+        )
+        route_base = route_state_from_info(
+            info=base.info,
+            card_route=route,
+            fallback=route_fallback,
+        )
 
-        seen_count = base.seen_count + 1
+        delta = self._RATING_DELTA[rating] * weight
+        new_proficiency = max(0.0, min(1.0, route_base.proficiency + delta))
+
+        seen_count = route_base.seen_count + 1
         correctish_count = (
-            base.correctish_count + 1
+            route_base.correctish_count + 1
             if rating in ("i_knew_it", "almost_knew", "learned_now")
-            else base.correctish_count
+            else route_base.correctish_count
         )
 
         if delta >= 0:
-            streak_up = base.streak_up + 1
+            streak_up = route_base.streak_up + 1
             streak_down = 0
         else:
             streak_up = 0
-            streak_down = base.streak_down + 1
+            streak_down = route_base.streak_down + 1
 
-        difficulty = base.current_difficulty
+        difficulty = route_base.current_difficulty
         if streak_up >= 3 and new_proficiency >= 0.7:
-            difficulty = min(5, difficulty + 1)
+            difficulty = clamp_difficulty(framework, difficulty + 1)
             streak_up = 0
         if streak_down >= 2:
             difficulty = max(1, difficulty - 1)
             streak_down = 0
 
-        return TopicProficiencyTransition(
-            user_id=user_id,
-            exam_id=exam_id,
-            topic_id=topic_link.topic_id,
+        route_state = default_route_state(
+            card_route=route,
             proficiency=new_proficiency,
             current_difficulty=difficulty,
             streak_up=streak_up,
             streak_down=streak_down,
             seen_count=seen_count,
             correctish_count=correctish_count,
-            info={
-                "last_rating": rating,
-                "applied_weight": weight,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            },
+        )
+        route_state.difficulty_framework = framework
+        updated_at = datetime.now(timezone.utc).isoformat()
+        info = merge_route_state(
+            info=base.info,
+            card_route=route,
+            state=route_state,
+            last_rating=rating,
+            applied_weight=weight,
+            updated_at=updated_at,
+        )
+
+        if route == "default":
+            column_proficiency = new_proficiency
+            column_difficulty = difficulty
+            column_streak_up = streak_up
+            column_streak_down = streak_down
+            column_seen_count = seen_count
+            column_correctish_count = correctish_count
+        else:
+            column_proficiency = base.proficiency
+            column_difficulty = base.current_difficulty
+            column_streak_up = base.streak_up
+            column_streak_down = base.streak_down
+            column_seen_count = base.seen_count
+            column_correctish_count = base.correctish_count
+
+        return TopicProficiencyTransition(
+            user_id=user_id,
+            exam_id=exam_id,
+            topic_id=topic_link.topic_id,
+            proficiency=column_proficiency,
+            current_difficulty=column_difficulty,
+            streak_up=column_streak_up,
+            streak_down=column_streak_down,
+            seen_count=column_seen_count,
+            correctish_count=column_correctish_count,
+            info=info,
         )

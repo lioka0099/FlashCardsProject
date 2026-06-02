@@ -12,6 +12,10 @@ from app.data.pinecone_backend import pinecone_namespace
 from app.data.vector_store import VectorStore
 from app.services.context_packs import build_diverse_chunk_pack
 from app.services.graph import generate_single_card
+from app.services.card_routing import classify_card_route
+from app.services.diagnostic_coverage import all_topics_diagnosed, diagnosed_topic_ids, undiagnosed_topics
+from app.services.difficulty_frameworks import clamp_difficulty, framework_for_route
+from app.services.topic_route_proficiency import default_route_state, route_state_from_info
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +33,7 @@ class TopicGenerationChoice:
     topic_id: str
     topic_label: str
     difficulty: int
+    cached_route: Optional[Dict[str, object]] = None
 
 
 @dataclass
@@ -95,6 +100,7 @@ class SessionCardGenerationService:
             topic_id=chosen.topic_id,
             topic_label=chosen.label,
             difficulty=difficulty,
+            cached_route=(chosen.info or {}).get("route_candidate") if isinstance(chosen.info, dict) else None,
         )
 
     def generate_next_card(
@@ -112,7 +118,22 @@ class SessionCardGenerationService:
         if store.vector_backend == "pinecone":
             store.set_namespace(pinecone_namespace(user_id=user_id, exam_id=exam_id))
 
-        choices = self._ordered_topic_choices(user_id=user_id, exam_id=exam_id)
+        diagnosed = diagnosed_topic_ids(repo=self.repo, user_id=user_id, exam_id=exam_id)
+        needs_diagnostic = not all_topics_diagnosed(repo=self.repo, user_id=user_id, exam_id=exam_id)
+        card_type = "diagnostic" if needs_diagnostic else "learning"
+        allowed_topic_ids = (
+            {t.topic_id for t in undiagnosed_topics(repo=self.repo, user_id=user_id, exam_id=exam_id)}
+            if needs_diagnostic
+            else diagnosed
+        )
+        if not allowed_topic_ids:
+            return None
+
+        choices = self._ordered_topic_choices(
+            user_id=user_id,
+            exam_id=exam_id,
+            allowed_topic_ids=allowed_topic_ids,
+        )
         for choice in choices:
             if prefetch and not self._can_prefetch_topic(user_id=user_id, exam_id=exam_id, topic_id=choice.topic_id):
                 continue
@@ -127,14 +148,28 @@ class SessionCardGenerationService:
                 )
                 if not context_pack:
                     continue
+                route_decision = classify_card_route(
+                    topic_label=choice.topic_label,
+                    context_pack=context_pack,
+                    cached_topic_route=choice.cached_route if isinstance(choice.cached_route, dict) else None,
+                )
+                if card_type == "diagnostic":
+                    difficulty = 1
+                else:
+                    difficulty = self._difficulty_for_route(
+                        user_id=user_id,
+                        exam_id=exam_id,
+                        topic_id=choice.topic_id,
+                        card_route=route_decision.card_route,
+                    )
                 card = generate_single_card(
                     exam_id=exam_id,
                     topic_id=choice.topic_id,
                     topic_label=choice.topic_label,
                     allowed_chunk_ids=chunk_ids,
                     context_pack=context_pack,
-                    difficulty=choice.difficulty,
-                    card_type="learning",
+                    difficulty=difficulty,
+                    card_type=card_type,
                     user_id=user_id,
                     store=store,
                 )
@@ -157,14 +192,32 @@ class SessionCardGenerationService:
                     user_id=user_id,
                     choice=choice,
                 )
+            if card_type == "diagnostic":
+                serve_reason = "diagnostic" if not prefetch else "prefetched"
+            else:
+                serve_reason = "prefetched" if prefetch else "generated"
             return GeneratedSessionCard(
                 card_id=card.card_id,
-                reason="prefetched" if prefetch else "generated",
+                reason=serve_reason,
                 topic_id=choice.topic_id,
             )
         return None
 
+    def archive_invalid_prefetched_cards(self, *, user_id: str, exam_id: str) -> None:
+        diagnosed = diagnosed_topic_ids(repo=self.repo, user_id=user_id, exam_id=exam_id)
+        needs_diagnostic = not all_topics_diagnosed(repo=self.repo, user_id=user_id, exam_id=exam_id)
+        for card in self.repo.list_cards_for_exam(exam_id=exam_id, limit=5000):
+            if not self._is_ready_prefetch(card=card, user_id=user_id):
+                continue
+            topic_id = self._card_topic_id(card)
+            if needs_diagnostic:
+                if card.card_type != "diagnostic" or topic_id in diagnosed:
+                    self._archive_prefetched_card(card=card, status=PREFETCH_STATUS_STALE)
+            elif card.card_type == "diagnostic" or topic_id not in diagnosed:
+                self._archive_prefetched_card(card=card, status=PREFETCH_STATUS_STALE)
+
     def get_fresh_prefetched_card(self, *, user_id: str, exam_id: str) -> Optional[GeneratedSessionCard]:
+        self.archive_invalid_prefetched_cards(user_id=user_id, exam_id=exam_id)
         cards = self.repo.list_cards_for_exam(exam_id=exam_id, limit=5000)
         candidates: List[StoredCard] = []
         for card in cards:
@@ -228,10 +281,20 @@ class SessionCardGenerationService:
             with _REFILL_LOCK:
                 _ACTIVE_REFILLS.discard(key)
 
-    def _ordered_topic_choices(self, *, user_id: str, exam_id: str) -> List[TopicGenerationChoice]:
+    def _ordered_topic_choices(
+        self,
+        *,
+        user_id: str,
+        exam_id: str,
+        allowed_topic_ids: Optional[Set[str]] = None,
+    ) -> List[TopicGenerationChoice]:
         topics = self.repo.list_topics(exam_id=exam_id)
         if not topics:
             return []
+        if allowed_topic_ids is not None:
+            topics = [t for t in topics if t.topic_id in allowed_topic_ids]
+            if not topics:
+                return []
 
         recent = self.repo.list_presentations(
             user_id=user_id,
@@ -270,6 +333,7 @@ class SessionCardGenerationService:
                     topic_id=topic.topic_id,
                     topic_label=topic.label,
                     difficulty=min(5, max(1, difficulty)),
+                    cached_route=(topic.info or {}).get("route_candidate") if isinstance(topic.info, dict) else None,
                 )
             )
         return choices
@@ -327,7 +391,9 @@ class SessionCardGenerationService:
             {
                 "prefetch_status": PREFETCH_STATUS_READY,
                 "generated_for_user_id": user_id,
-                "generated_difficulty": choice.difficulty,
+                "generated_difficulty": card.difficulty,
+                "generated_card_route": info.get("card_route", "default"),
+                "generated_difficulty_framework": info.get("difficulty_framework", "bloom"),
                 "generated_topic_proficiency": float(prof.proficiency) if prof else None,
                 "prefetch_created_at": datetime.now(timezone.utc).isoformat(),
             }
@@ -372,13 +438,49 @@ class SessionCardGenerationService:
     def _is_prefetch_fresh(self, *, card: StoredCard, user_id: str, exam_id: str) -> bool:
         generated_difficulty = int(card.info.get("generated_difficulty") or card.difficulty)
         topic_id = self._card_topic_id(card)
+        card_route = str((card.info or {}).get("card_route") or "default")
+        current_difficulty = self._difficulty_for_route(
+            user_id=user_id,
+            exam_id=exam_id,
+            topic_id=topic_id,
+            card_route=card_route,
+        )
+        return abs(generated_difficulty - current_difficulty) <= 1
+
+    def _difficulty_for_route(
+        self,
+        *,
+        user_id: str,
+        exam_id: str,
+        topic_id: str,
+        card_route: str,
+    ) -> int:
+        framework = framework_for_route(card_route)
         prof = self.repo.get_topic_proficiency(
             user_id=user_id,
             exam_id=exam_id,
             topic_id=topic_id,
         )
-        current_difficulty = int(prof.current_difficulty) if prof is not None else 1
-        return abs(generated_difficulty - current_difficulty) <= 1
+        if prof is None:
+            return 1
+        if card_route == "math_calculation":
+            fallback = default_route_state(card_route="math_calculation", current_difficulty=1)
+        else:
+            fallback = default_route_state(
+                card_route="default",
+                proficiency=prof.proficiency,
+                current_difficulty=prof.current_difficulty,
+                streak_up=prof.streak_up,
+                streak_down=prof.streak_down,
+                seen_count=prof.seen_count,
+                correctish_count=prof.correctish_count,
+            )
+        route_state = route_state_from_info(
+            info=prof.info or {},
+            card_route=card_route,
+            fallback=fallback,
+        )
+        return clamp_difficulty(framework, route_state.current_difficulty)
 
     def _choose_card_with_topic_fairness(
         self,

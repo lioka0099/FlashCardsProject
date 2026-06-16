@@ -101,3 +101,49 @@ def merge_route_state(
     out["updated_at"] = updated_at
     return out
 
+
+def project_route_columns(
+    *,
+    info: Optional[Dict[str, Any]],
+    fallback: RouteProficiencyState,
+) -> RouteProficiencyState:
+    """
+    Project canonical per-route state into legacy top-level proficiency columns.
+
+    Route state remains the source of truth. The top-level columns are a
+    compatibility summary for API/UI consumers that still expect one visible
+    proficiency/difficulty/review count per topic.
+    """
+    raw_info = info or {}
+    route_map = raw_info.get(ROUTE_PROFICIENCY_KEY)
+    if not isinstance(route_map, dict) or not route_map:
+        return fallback
+
+    states: Dict[str, RouteProficiencyState] = {}
+    for route, raw_state in route_map.items():
+        if not isinstance(raw_state, dict):
+            continue
+        route_name = normalize_route(str(route))
+        states[route_name] = route_state_from_info(
+            info={ROUTE_PROFICIENCY_KEY: {route_name: raw_state}},
+            card_route=route_name,
+            fallback=default_route_state(card_route=route_name),
+        )
+    if not states:
+        return fallback
+
+    last_route = normalize_route(str(raw_info.get("last_card_route") or DEFAULT_ROUTE))
+    visible = states.get(last_route) or states.get(DEFAULT_ROUTE) or next(iter(states.values()))
+    total_seen = sum(state.seen_count for state in states.values())
+    total_correctish = sum(state.correctish_count for state in states.values())
+
+    return RouteProficiencyState(
+        difficulty_framework=visible.difficulty_framework,
+        current_difficulty=visible.current_difficulty,
+        proficiency=visible.proficiency,
+        streak_up=visible.streak_up,
+        streak_down=visible.streak_down,
+        seen_count=total_seen,
+        correctish_count=total_correctish,
+    )
+

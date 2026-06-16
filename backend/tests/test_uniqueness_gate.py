@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -68,9 +69,54 @@ class UniquenessGateTests(unittest.TestCase):
         out = node_check_uniqueness(_state(batch_seen_questions=(seen,)))
         self.assertFalse(out["is_unique"])
 
+    def test_duplicate_from_different_topic_same_batch_is_rejected(self):
+        seen = BatchSeenQuestion(
+            question_id="q1",
+            topic_id="other-topic",
+            question_text="same meaning",
+            difficulty=2,
+            embedding=np.array([1.0, 0.0], dtype="float32"),
+            created_seq=1,
+        )
+        out = node_check_uniqueness(_state(batch_seen_questions=(seen,)))
+        self.assertFalse(out["is_unique"])
+
     def test_non_pinecone_backend_raises_for_mandatory_gate(self):
         with self.assertRaises(RuntimeError):
             node_check_uniqueness(_state(batch_seen_questions=tuple()))
+
+    def test_math_calculation_allows_semantic_similarity_when_text_differs(self):
+        seen = BatchSeenQuestion(
+            question_id="q1",
+            topic_id="t1",
+            question_text="Differentiate x**2 with respect to x.",
+            difficulty=2,
+            embedding=np.array([1.0, 0.0], dtype="float32"),
+            created_seq=1,
+        )
+        state = _state(batch_seen_questions=(seen,))
+        state["card_route"] = "math_calculation"
+        state["question"] = "Differentiate x**3 with respect to x."
+        out = node_check_uniqueness(state)
+        self.assertTrue(out["is_unique"])
+
+    def test_math_calculation_rejects_exact_text_duplicate(self):
+        state = _state(batch_seen_questions=tuple())
+        state["card_route"] = "math_calculation"
+        state["question"] = "Differentiate x**2 with respect to x."
+
+        class _FakeDB:
+            @staticmethod
+            def has_equivalent_question_text(*, exam_id, question_text):
+                return True
+
+        class _FakeStore:
+            def __init__(self, **_kwargs):
+                self.db = _FakeDB()
+
+        with patch("app.services.graph.VectorStore", _FakeStore):
+            out = node_check_uniqueness(state)
+        self.assertFalse(out["is_unique"])
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from app.services.topic_route_proficiency import (
     default_route_state,
     merge_route_state,
     normalize_route,
+    project_route_columns,
     route_state_from_info,
 )
 
@@ -117,10 +118,17 @@ class TopicProficiencyStateService:
             seen_count=base.seen_count,
             correctish_count=base.correctish_count,
         )
-        route_fallback = (
-            default_fallback
-            if route == "default"
-            else default_route_state(card_route=route, current_difficulty=1)
+        # When a route is seen for the first time (e.g. first math learning card
+        # right after diagnostic), bootstrap from the existing topic-level state
+        # so review counters keep accumulating instead of resetting to route-zero.
+        route_fallback = default_route_state(
+            card_route=route,
+            proficiency=base.proficiency,
+            current_difficulty=base.current_difficulty,
+            streak_up=base.streak_up,
+            streak_down=base.streak_down,
+            seen_count=base.seen_count,
+            correctish_count=base.correctish_count,
         )
         route_base = route_state_from_info(
             info=base.info,
@@ -173,30 +181,26 @@ class TopicProficiencyStateService:
             updated_at=updated_at,
         )
 
-        if route == "default":
-            column_proficiency = new_proficiency
-            column_difficulty = difficulty
-            column_streak_up = streak_up
-            column_streak_down = streak_down
-            column_seen_count = seen_count
-            column_correctish_count = correctish_count
-        else:
-            column_proficiency = base.proficiency
-            column_difficulty = base.current_difficulty
-            column_streak_up = base.streak_up
-            column_streak_down = base.streak_down
-            column_seen_count = base.seen_count
-            column_correctish_count = base.correctish_count
+        projection_fallback = default_route_state(
+            card_route=route,
+            proficiency=base.proficiency,
+            current_difficulty=base.current_difficulty,
+            streak_up=base.streak_up,
+            streak_down=base.streak_down,
+            seen_count=base.seen_count,
+            correctish_count=base.correctish_count,
+        )
+        projection = project_route_columns(info=info, fallback=projection_fallback)
 
         return TopicProficiencyTransition(
             user_id=user_id,
             exam_id=exam_id,
             topic_id=topic_link.topic_id,
-            proficiency=column_proficiency,
-            current_difficulty=column_difficulty,
-            streak_up=column_streak_up,
-            streak_down=column_streak_down,
-            seen_count=column_seen_count,
-            correctish_count=column_correctish_count,
+            proficiency=projection.proficiency,
+            current_difficulty=projection.current_difficulty,
+            streak_up=projection.streak_up,
+            streak_down=projection.streak_down,
+            seen_count=projection.seen_count,
+            correctish_count=projection.correctish_count,
             info=info,
         )

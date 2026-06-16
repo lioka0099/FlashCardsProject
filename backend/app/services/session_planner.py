@@ -107,6 +107,8 @@ class SessionPlannerService:
             card = self.repo.get_card(card_id=s.card_id)
             if card is None or card.status != "active":
                 continue
+            if card.card_type == "diagnostic":
+                continue
             if self._card_topic_id(card) not in diagnosed:
                 continue
             cards.append(card)
@@ -126,6 +128,8 @@ class SessionPlannerService:
             card = self.repo.get_card(card_id=s.card_id)
             if card is None or card.status != "active":
                 continue
+            if card.card_type == "diagnostic":
+                continue
             if self._card_topic_id(card) not in diagnosed:
                 continue
             cards.append(card)
@@ -133,6 +137,7 @@ class SessionPlannerService:
 
     def _build_progression_queue(self, *, user_id: str, exam_id: str, now: datetime) -> List[StoredCard]:
         diagnosed = self._diagnosed_topic_ids(user_id=user_id, exam_id=exam_id)
+        presented_card_ids = self._presented_card_ids(user_id=user_id, exam_id=exam_id)
         cards = self.repo.list_cards_for_exam(exam_id=exam_id, limit=1000)
         out: List[StoredCard] = []
         for card in cards:
@@ -146,6 +151,8 @@ class SessionPlannerService:
                 continue
             sched = self.repo.get_card_scheduling(card_id=card.card_id)
             if sched is None:
+                if card.card_id in presented_card_ids:
+                    continue
                 out.append(card)
                 continue
             if sched.state in {"new", "learning", "review"} and self._is_due(sched.due_at, now):
@@ -154,6 +161,17 @@ class SessionPlannerService:
         # Deterministic tie-breaks: difficulty asc, created_at asc, card_id asc.
         out.sort(key=lambda c: (int(c.difficulty), c.created_at, c.card_id))
         return out
+
+    def _presented_card_ids(self, *, user_id: str, exam_id: str) -> Set[str]:
+        return {
+            presentation.card_id
+            for presentation in self.repo.list_presentations(
+                user_id=user_id,
+                exam_id=exam_id,
+                ascending=False,
+                limit=5000,
+            )
+        }
 
     def _build_diagnostic_queue(self, *, user_id: str, exam_id: str) -> List[StoredCard]:
         cards = self.repo.list_cards_for_exam(exam_id=exam_id, limit=1000)

@@ -6,6 +6,8 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import sympy as sp
 
+from app.services.math_problem_spec import normalize_math_problem_spec
+
 
 @dataclass
 class MathSolverResult:
@@ -60,6 +62,10 @@ def _unsupported(reason: str, payload: Dict[str, Any]) -> MathSolverResult:
 
 def _parse_error(exc: Exception, payload: Dict[str, Any]) -> MathSolverResult:
     return MathSolverResult(status="parse_error", details={"reason": str(exc), "payload": payload})
+
+
+def _invalid_spec(reason: str, payload: Dict[str, Any]) -> MathSolverResult:
+    return MathSolverResult(status="invalid_spec", details={"reason": reason, "payload": payload})
 
 
 def _solved(final: Any, steps: List[str], target: Dict[str, Any]) -> MathSolverResult:
@@ -196,7 +202,25 @@ def _solve_integral(target: Dict[str, Any]) -> MathSolverResult:
 
 def solve_math_problem(question_payload: Optional[Dict[str, Any]]) -> MathSolverResult:
     payload = question_payload or {}
-    target = _target_from_payload(payload)
+    if not isinstance(payload, dict):
+        return _invalid_spec("math payload is not an object", {"payload": payload})
+
+    if isinstance(payload.get("verification_target"), dict):
+        target = _target_from_payload(payload)
+    else:
+        normalized = normalize_math_problem_spec(payload)
+        if not normalized.ok:
+            status = normalized.status if normalized.status in {"insufficient_evidence", "unsupported"} else "invalid_spec"
+            return MathSolverResult(
+                status=status,
+                details={
+                    "reason": normalized.reason,
+                    "payload": payload,
+                    **normalized.details,
+                },
+            )
+        payload = normalized.spec
+        target = _target_from_payload(payload)
     kind = _kind(payload, target)
     try:
         if kind in {"arithmetic", "calculate", "numeric", "substitution"}:

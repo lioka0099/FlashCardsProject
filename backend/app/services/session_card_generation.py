@@ -26,6 +26,8 @@ PREFETCH_STATUS_FAILED = "failed"
 
 _REFILL_LOCK = threading.Lock()
 _ACTIVE_REFILLS: Set[Tuple[str, str]] = set()
+_GENERATION_LOCK = threading.Lock()
+_GENERATION_LOCKS: Dict[Tuple[str, str], threading.Lock] = {}
 
 
 @dataclass
@@ -111,6 +113,43 @@ class SessionCardGenerationService:
         store: Optional[VectorStore] = None,
         prefetch: bool = False,
     ) -> Optional[GeneratedSessionCard]:
+        lock_key = (user_id, exam_id)
+        with _GENERATION_LOCK:
+            lock = _GENERATION_LOCKS.setdefault(lock_key, threading.Lock())
+        acquired = lock.acquire(blocking=not prefetch)
+        if not acquired:
+            logger.info(
+                "Skipping overlapping prefetch generation for exam %s user %s",
+                exam_id,
+                user_id,
+            )
+            return None
+        try:
+            if not prefetch:
+                prefetched = self.get_fresh_prefetched_card(user_id=user_id, exam_id=exam_id)
+                if prefetched is not None:
+                    return prefetched
+            return self._generate_next_card_unlocked(
+                user_id=user_id,
+                exam_id=exam_id,
+                store=store,
+                prefetch=prefetch,
+            )
+        finally:
+            lock.release()
+            with _GENERATION_LOCK:
+                existing = _GENERATION_LOCKS.get(lock_key)
+                if existing is lock and not lock.locked():
+                    _GENERATION_LOCKS.pop(lock_key, None)
+
+    def _generate_next_card_unlocked(
+        self,
+        *,
+        user_id: str,
+        exam_id: str,
+        store: Optional[VectorStore] = None,
+        prefetch: bool = False,
+    ) -> Optional[GeneratedSessionCard]:
         store = store or VectorStore()
         exam = self.repo.get_exam(exam_id)
         if exam is None:
@@ -166,6 +205,16 @@ class SessionCardGenerationService:
                         topic_id=choice.topic_id,
                         card_route=route_decision.card_route,
                     )
+                logger.info(
+                    "Generating session card: exam_id=%s topic_id=%s card_type=%s "
+                    "route=%s difficulty=%s route_confidence=%.2f",
+                    exam_id,
+                    choice.topic_id,
+                    card_type,
+                    route_decision.card_route,
+                    difficulty,
+                    float(route_decision.confidence or 0.0),
+                )
                 card = generate_single_card(
                     exam_id=exam_id,
                     topic_id=choice.topic_id,
@@ -177,6 +226,37 @@ class SessionCardGenerationService:
                     user_id=user_id,
                     store=store,
                 )
+                if card is None and route_decision.card_route == "math_calculation":
+                    fallback_difficulty = (
+                        1
+                        if card_type == "diagnostic"
+                        else self._difficulty_for_route(
+                            user_id=user_id,
+                            exam_id=exam_id,
+                            topic_id=choice.topic_id,
+                            card_route="math_conceptual",
+                        )
+                    )
+                    logger.info(
+                        "Math calculation generation failed; retrying conceptual fallback: "
+                        "exam_id=%s topic_id=%s card_type=%s difficulty=%s",
+                        exam_id,
+                        choice.topic_id,
+                        card_type,
+                        fallback_difficulty,
+                    )
+                    card = generate_single_card(
+                        exam_id=exam_id,
+                        topic_id=choice.topic_id,
+                        topic_label=choice.topic_label,
+                        allowed_chunk_ids=chunk_ids,
+                        context_pack=context_pack,
+                        difficulty=fallback_difficulty,
+                        card_type=card_type,
+                        user_id=user_id,
+                        store=store,
+                        card_route_override="math_conceptual",
+                    )
             except Exception:
                 logger.exception(
                     "Failed to generate session card for exam %s topic %s",
@@ -470,12 +550,7 @@ class SessionCardGenerationService:
         if card_route == "math_calculation":
             fallback = default_route_state(card_route="math_calculation", current_difficulty=1)
         elif card_route == "math_conceptual":
-            fallback = default_route_state(
-                card_route="math_conceptual",
-                current_difficulty=prof.current_difficulty,
-                seen_count=prof.seen_count,
-                correctish_count=prof.correctish_count,
-            )
+            fallback = default_route_state(card_route="math_conceptual", current_difficulty=1)
         else:
             fallback = default_route_state(
                 card_route="default",
@@ -491,7 +566,19 @@ class SessionCardGenerationService:
             card_route=card_route,
             fallback=fallback,
         )
-        return clamp_difficulty(framework, route_state.current_difficulty)
+        difficulty = clamp_difficulty(framework, route_state.current_difficulty)
+        logger.debug(
+            "Selected route-aware difficulty: exam_id=%s topic_id=%s route=%s "
+            "framework=%s difficulty=%s route_seen=%s route_correctish=%s",
+            exam_id,
+            topic_id,
+            card_route,
+            framework,
+            difficulty,
+            route_state.seen_count,
+            route_state.correctish_count,
+        )
+        return difficulty
 
     def _choose_card_with_topic_fairness(
         self,

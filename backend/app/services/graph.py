@@ -54,16 +54,21 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "max_question_attempts": 3,
     "max_answer_attempts": 3,
     "max_full_restarts": 5,
+    "math_max_question_attempts": 3,
+    "math_max_answer_attempts": 2,
+    "math_max_full_restarts": 3,
     "uniqueness_threshold": 0.85,
+    "math_uniqueness_threshold": 0.97,
+    "uniqueness_top_k": 50,
     "validation_threshold": 0.7,
-    "math_validation_threshold": 0.75,
+    "math_validation_threshold": 0.7,
     "initial_k": 8,
     "initial_min_score": 0.4,
     "strengthen_k_delta": 2,
     "strengthen_min_score_delta": 0.05,
     "commit_retry_attempts": 3,
     "commit_retry_sleep_s": 0.25,
-    "graph_recursion_limit": 80,
+    "graph_recursion_limit": 140,
 }
 
 
@@ -216,6 +221,7 @@ class CardGenState(TypedDict):
     topic_label: str
     difficulty: int
     card_route: str
+    card_route_override: Optional[str]
     route_metadata: Dict[str, Any]
     difficulty_framework: str
     difficulty_level_name: str
@@ -249,12 +255,14 @@ class CardGenState(TypedDict):
     question_attempts: int
     answer_attempts: int
     full_restart_count: int
+    math_validation_fail_cycles: int
     
     # Limits
     max_question_attempts: int
     max_answer_attempts: int
     max_full_restarts: int
     uniqueness_threshold: float
+    uniqueness_top_k: int
     validation_threshold: float
     commit_retry_attempts: int
     commit_retry_sleep_s: float
@@ -287,12 +295,26 @@ def node_generate_question(state: CardGenState) -> CardGenState:
     failure_reason = None
     try:
         if route == "math_calculation":
+            store = VectorStore(basepath=state["store_basepath"])
+            blocked_questions = [
+                str(seen.question_text or "").strip()
+                for seen in state.get("batch_seen_questions", ())
+                if str(seen.question_text or "").strip()
+            ]
+            blocked_questions.extend(
+                store.db.list_question_texts_for_exam(
+                    exam_id=state["exam_id"],
+                    limit=100,
+                )
+            )
             result = MathStudentModelService().generate_question(
                 topic_label=state["topic_label"],
                 context_pack=state["context_pack"],
                 difficulty=state["difficulty"],
                 memory=state.get("student_memory") or {},
                 route_metadata=state.get("route_metadata") or {},
+                avoid_questions=blocked_questions,
+                attempt_no=int(state.get("question_attempts") or 0) + 1,
             )
             question = result.question
             math_payload = result.payload
@@ -320,12 +342,58 @@ def node_generate_question(state: CardGenState) -> CardGenState:
         "math_question_payload": math_payload,
         "math_solver_payload": math_solver_payload,
         "question_attempts": state["question_attempts"] + 1,
+        "math_validation_fail_cycles": 0,
     }
 
 
 def node_route_card(state: CardGenState) -> CardGenState:
     """Choose default vs math-calculation generation for this topic/context."""
     store = VectorStore(basepath=state["store_basepath"])
+    override = state.get("card_route_override")
+    if override in {"default", "math_calculation", "math_conceptual"}:
+        framework = framework_for_route(override)
+        difficulty = clamp_difficulty(framework, state["difficulty"])
+        level = get_level(framework, difficulty)
+        route_metadata = {
+            "card_route": override,
+            "subject_type": "math" if override.startswith("math_") else "general",
+            "math_kind": "calculation" if override == "math_calculation" else "conceptual" if override == "math_conceptual" else "none",
+            "confidence": 1.0,
+            "reason": "Session generation forced this route as a fallback.",
+        }
+        return {
+            **state,
+            "card_route": override,
+            "route_metadata": route_metadata,
+            "difficulty_framework": framework,
+            "difficulty": difficulty,
+            "difficulty_level_name": level.name,
+            "validation_threshold": (
+                DEFAULT_CONFIG["math_validation_threshold"]
+                if override == "math_calculation"
+                else DEFAULT_CONFIG["validation_threshold"]
+            ),
+            "uniqueness_threshold": (
+                DEFAULT_CONFIG["math_uniqueness_threshold"]
+                if override == "math_calculation"
+                else DEFAULT_CONFIG["uniqueness_threshold"]
+            ),
+            "max_answer_attempts": (
+                DEFAULT_CONFIG["math_max_answer_attempts"]
+                if override == "math_calculation"
+                else DEFAULT_CONFIG["max_answer_attempts"]
+            ),
+            "max_question_attempts": (
+                DEFAULT_CONFIG["math_max_question_attempts"]
+                if override == "math_calculation"
+                else DEFAULT_CONFIG["max_question_attempts"]
+            ),
+            "max_full_restarts": (
+                DEFAULT_CONFIG["math_max_full_restarts"]
+                if override == "math_calculation"
+                else DEFAULT_CONFIG["max_full_restarts"]
+            ),
+        }
     topic_info: Dict[str, Any] = {}
     document_math_profile: Optional[Dict[str, Any]] = None
     try:
@@ -358,7 +426,27 @@ def node_route_card(state: CardGenState) -> CardGenState:
         "validation_threshold": (
             DEFAULT_CONFIG["math_validation_threshold"]
             if decision.card_route == "math_calculation"
-            else state["validation_threshold"]
+            else state.get("validation_threshold", DEFAULT_CONFIG["validation_threshold"])
+        ),
+        "uniqueness_threshold": (
+            DEFAULT_CONFIG["math_uniqueness_threshold"]
+            if decision.card_route == "math_calculation"
+            else state.get("uniqueness_threshold", DEFAULT_CONFIG["uniqueness_threshold"])
+        ),
+        "max_answer_attempts": (
+            DEFAULT_CONFIG["math_max_answer_attempts"]
+            if decision.card_route == "math_calculation"
+            else state.get("max_answer_attempts", DEFAULT_CONFIG["max_answer_attempts"])
+        ),
+        "max_question_attempts": (
+            DEFAULT_CONFIG["math_max_question_attempts"]
+            if decision.card_route == "math_calculation"
+            else state.get("max_question_attempts", DEFAULT_CONFIG["max_question_attempts"])
+        ),
+        "max_full_restarts": (
+            DEFAULT_CONFIG["math_max_full_restarts"]
+            if decision.card_route == "math_calculation"
+            else state.get("max_full_restarts", DEFAULT_CONFIG["max_full_restarts"])
         ),
     }
 
@@ -378,19 +466,54 @@ def node_embed_question(state: CardGenState) -> CardGenState:
 def node_check_uniqueness(state: CardGenState) -> CardGenState:
     """
     Check if question is semantically unique within this exam.
-    Uses Pinecone question index search for similarity lookup (topic-scoped).
+    Uses Pinecone question index search for exam-scoped similarity lookup.
     """
     threshold = float(state["uniqueness_threshold"])
     query_vec = state["question_embedding"]
+    route = state.get("card_route") or "default"
+    question_norm = " ".join(str(state.get("question") or "").strip().lower().split())
+
+    if route == "math_calculation":
+        for seen in state.get("batch_seen_questions", ()):
+            seen_norm = " ".join(str(seen.question_text or "").strip().lower().split())
+            if seen_norm and seen_norm == question_norm:
+                logger.warning(
+                    "Math uniqueness rejected exact in-batch duplicate: topic_id=%s seen_topic_id=%s question=%s",
+                    state.get("topic_id"),
+                    seen.topic_id,
+                    (state.get("question") or "")[:120],
+                )
+                return {**state, "is_unique": False}
+        store = VectorStore(basepath=state["store_basepath"])
+        if store.db.has_equivalent_question_text(
+            exam_id=state["exam_id"],
+            question_text=state.get("question") or "",
+        ):
+            logger.warning(
+                "Math uniqueness rejected exact indexed duplicate: topic_id=%s question=%s",
+                state.get("topic_id"),
+                (state.get("question") or "")[:120],
+            )
+            return {**state, "is_unique": False}
+        return {**state, "is_unique": True}
+
     if query_vec is None:
         return {**state, "is_unique": False}
 
     # In-batch visibility check (deterministic sequential snapshot).
     for seen in state.get("batch_seen_questions", ()):
-        if seen.topic_id != state["topic_id"]:
-            continue
         sim = _cosine_similarity(query_vec, seen.embedding)
         if sim >= threshold:
+            logger.info(
+                "Question uniqueness rejected in-batch candidate: route=%s topic_id=%s "
+                "seen_topic_id=%s similarity=%.3f threshold=%.3f question=%s",
+                state.get("card_route") or "default",
+                state.get("topic_id"),
+                seen.topic_id,
+                sim,
+                threshold,
+                (state.get("question") or "")[:120],
+            )
             return {**state, "is_unique": False}
 
     store = VectorStore(basepath=state["store_basepath"])
@@ -407,11 +530,20 @@ def node_check_uniqueness(state: CardGenState) -> CardGenState:
         index=pc.questions,
         namespace=ns,
         query_vec=query_vec,
-        top_k=20,
-        filter={"topic_id": state["topic_id"]},
+        top_k=int(state.get("uniqueness_top_k") or DEFAULT_CONFIG["uniqueness_top_k"]),
     )
     for _qid, sim in matches:
         if sim >= threshold:
+            logger.info(
+                "Question uniqueness rejected indexed candidate: route=%s topic_id=%s "
+                "matched_question_id=%s similarity=%.3f threshold=%.3f question=%s",
+                state.get("card_route") or "default",
+                state.get("topic_id"),
+                _qid,
+                sim,
+                threshold,
+                (state.get("question") or "")[:120],
+            )
             return {**state, "is_unique": False}
     return {**state, "is_unique": True}
 
@@ -575,27 +707,64 @@ def node_verify_math(state: CardGenState) -> CardGenState:
         question_payload["verification_target"] = solver_target
         answer_payload["verification_target"] = solver_target
     result = verify_math_solution(question_payload, answer_payload)
+    threshold = float(state.get("validation_threshold", DEFAULT_CONFIG["math_validation_threshold"]))
+    validation_ok = (state.get("validation_score") or 0.0) >= threshold
+    math_ok = result.status == "verified"
     return {
         **state,
         "verification_result": result.to_info(),
-        "math_validation_passed": result.status == "verified",
+        "math_validation_passed": math_ok,
+        "math_validation_fail_cycles": (
+            0
+            if validation_ok and math_ok
+            else int(state.get("math_validation_fail_cycles") or 0) + 1
+        ),
     }
 
 
 def node_strengthen(state: CardGenState) -> CardGenState:
     """Strengthen retrieval parameters for retry."""
+    next_k = state["k"] + state["strengthen_k_delta"]
+    next_min_score = max(0.2, state["min_score"] - state["strengthen_min_score_delta"])
+    logger.info(
+        "Strengthening retrieval after validation failure: route=%s topic_id=%s "
+        "answer_attempts=%s/%s validation_score=%.2f threshold=%.2f "
+        "math_status=%s next_k=%s next_min_score=%.2f",
+        state.get("card_route") or "default",
+        state.get("topic_id"),
+        state.get("answer_attempts"),
+        state.get("max_answer_attempts"),
+        float(state.get("validation_score") or 0.0),
+        float(state.get("validation_threshold") or 0.0),
+        (state.get("verification_result") or {}).get("status"),
+        next_k,
+        next_min_score,
+    )
     return {
         **state,
-        "k": state["k"] + state["strengthen_k_delta"],
-        "min_score": max(0.2, state["min_score"] - state["strengthen_min_score_delta"]),
+        "k": next_k,
+        "min_score": next_min_score,
     }
 
 
-def _is_insufficient_math_failure(state: CardGenState) -> bool:
+def _is_math_question_failure(state: CardGenState) -> bool:
     if state.get("card_route") != "math_calculation":
         return False
+    if not state.get("question_generation_failed"):
+        return False
     reason = str(state.get("question_failure_reason") or "").lower()
-    return "insufficient evidence" in reason or "could not solve generated question" in reason
+    return any(
+        token in reason
+        for token in (
+            "insufficient evidence",
+            "invalid_spec",
+            "unsupported",
+            "parse_error",
+            "could not solve generated question",
+            "math problem spec",
+            "math question generation returned no question",
+        )
+    )
 
 
 def node_adapt_math_question_failure(state: CardGenState) -> CardGenState:
@@ -606,16 +775,40 @@ def node_adapt_math_question_failure(state: CardGenState) -> CardGenState:
     if int(state.get("difficulty") or 1) > 1:
         difficulty = clamp_difficulty("tag", int(state["difficulty"]) - 1)
         level = get_level("tag", difficulty)
+        logger.info(
+            "Adapting math calculation card after repeated failure: topic_id=%s "
+            "difficulty=%s next_difficulty=%s validation_score=%.2f math_status=%s",
+            state.get("topic_id"),
+            state.get("difficulty"),
+            difficulty,
+            float(state.get("validation_score") or 0.0),
+            (state.get("verification_result") or {}).get("status"),
+        )
         return {
             **state,
             "difficulty": difficulty,
             "difficulty_level_name": level.name,
             "question": None,
+            "question_embedding": None,
+            "question_id": None,
+            "is_unique": False,
+            "answer": None,
+            "proofs": None,
+            "validation_score": None,
+            "validation_critique": None,
+            "grounding_validation_score": None,
+            "verification_result": {},
+            "math_validation_passed": False,
             "question_generation_failed": False,
             "question_failure_reason": None,
             "math_question_payload": {},
             "math_solver_payload": {},
+            "math_answer_payload": {},
             "question_attempts": 0,
+            "answer_attempts": 0,
+            "math_validation_fail_cycles": 0,
+            "k": state.get("initial_k", DEFAULT_CONFIG["initial_k"]),
+            "min_score": state.get("initial_min_score", DEFAULT_CONFIG["initial_min_score"]),
         }
 
     framework = framework_for_route("math_conceptual")
@@ -631,6 +824,13 @@ def node_adapt_math_question_failure(state: CardGenState) -> CardGenState:
             "adapted_from": "math_calculation",
         }
     )
+    logger.info(
+        "Falling back from math calculation to conceptual math: topic_id=%s "
+        "validation_score=%.2f math_status=%s",
+        state.get("topic_id"),
+        float(state.get("validation_score") or 0.0),
+        (state.get("verification_result") or {}).get("status"),
+    )
     return {
         **state,
         "card_route": "math_conceptual",
@@ -639,12 +839,29 @@ def node_adapt_math_question_failure(state: CardGenState) -> CardGenState:
         "difficulty": difficulty,
         "difficulty_level_name": level.name,
         "validation_threshold": DEFAULT_CONFIG["validation_threshold"],
+        "max_answer_attempts": DEFAULT_CONFIG["max_answer_attempts"],
+        "max_full_restarts": DEFAULT_CONFIG["max_full_restarts"],
         "question": None,
+        "question_embedding": None,
+        "question_id": None,
+        "is_unique": False,
+        "answer": None,
+        "proofs": None,
+        "validation_score": None,
+        "validation_critique": None,
+        "grounding_validation_score": None,
+        "verification_result": {},
+        "math_validation_passed": False,
         "question_generation_failed": False,
         "question_failure_reason": None,
         "math_question_payload": {},
         "math_solver_payload": {},
+        "math_answer_payload": {},
         "question_attempts": 0,
+        "answer_attempts": 0,
+        "math_validation_fail_cycles": 0,
+        "k": state.get("initial_k", DEFAULT_CONFIG["initial_k"]),
+        "min_score": state.get("initial_min_score", DEFAULT_CONFIG["initial_min_score"]),
     }
 
 
@@ -729,6 +946,19 @@ def node_store_card(state: CardGenState) -> CardGenState:
 
 def node_full_restart(state: CardGenState) -> CardGenState:
     """Reset state for full restart with new question."""
+    next_restart_count = state["full_restart_count"] + 1
+    logger.warning(
+        "Full card generation restart: route=%s topic_id=%s restart=%s/%s "
+        "validation_score=%s threshold=%.2f math_status=%s question_failure=%s",
+        state.get("card_route") or "default",
+        state.get("topic_id"),
+        next_restart_count,
+        state.get("max_full_restarts"),
+        state.get("validation_score"),
+        float(state.get("validation_threshold") or 0.0),
+        (state.get("verification_result") or {}).get("status"),
+        state.get("question_failure_reason"),
+    )
     return {
         **state,
         "question": None,
@@ -749,7 +979,8 @@ def node_full_restart(state: CardGenState) -> CardGenState:
         "question_failure_reason": None,
         "question_attempts": 0,
         "answer_attempts": 0,
-        "full_restart_count": state["full_restart_count"] + 1,
+        "full_restart_count": next_restart_count,
+        "math_validation_fail_cycles": 0,
         "k": state["initial_k"],
         "min_score": state["initial_min_score"],
     }
@@ -764,10 +995,29 @@ def decide_after_question_generation(state: CardGenState) -> str:
         return "embed_question"
     if state["question_attempts"] < state["max_question_attempts"]:
         return "generate_question"
-    if _is_insufficient_math_failure(state):
+    if _is_math_question_failure(state):
+        logger.info(
+            "Adapting math calculation after question/spec failure: topic_id=%s "
+            "question_attempts=%s/%s reason=%s",
+            state.get("topic_id"),
+            state.get("question_attempts"),
+            state.get("max_question_attempts"),
+            state.get("question_failure_reason"),
+        )
         return "adapt_question"
     if state["full_restart_count"] < state["max_full_restarts"]:
         return "full_restart"
+    logger.warning(
+        "Ending card generation after question attempts exhausted: route=%s topic_id=%s "
+        "question_attempts=%s max_question_attempts=%s restarts=%s/%s reason=%s",
+        state.get("card_route") or "default",
+        state.get("topic_id"),
+        state.get("question_attempts"),
+        state.get("max_question_attempts"),
+        state.get("full_restart_count"),
+        state.get("max_full_restarts"),
+        state.get("question_failure_reason"),
+    )
     return "end"
 
 
@@ -784,6 +1034,15 @@ def decide_after_uniqueness(state: CardGenState) -> str:
         return "full_restart"
     
     # Absolute max reached - give up
+    logger.warning(
+        "Ending card generation after uniqueness attempts exhausted: route=%s topic_id=%s "
+        "question_attempts=%s restarts=%s/%s",
+        state.get("card_route") or "default",
+        state.get("topic_id"),
+        state.get("question_attempts"),
+        state.get("full_restart_count"),
+        state.get("max_full_restarts"),
+    )
     return "end"
 
 
@@ -796,14 +1055,48 @@ def decide_after_validation(state: CardGenState) -> str:
     if validation_ok and math_ok:
         return "store_card"
     
+    logger.info(
+        "Answer validation failed: route=%s topic_id=%s answer_attempts=%s/%s "
+        "validation_score=%.2f threshold=%.2f math_passed=%s math_status=%s "
+        "critique=%s",
+        state.get("card_route") or "default",
+        state.get("topic_id"),
+        state.get("answer_attempts"),
+        state.get("max_answer_attempts"),
+        float(state.get("validation_score") or 0.0),
+        float(threshold),
+        math_ok,
+        (state.get("verification_result") or {}).get("status"),
+        state.get("validation_critique"),
+    )
+
     if state["answer_attempts"] < state["max_answer_attempts"]:
         return "strengthen"
+
+    if (
+        state.get("card_route") == "math_calculation"
+        and int(state.get("math_validation_fail_cycles") or 0) >= 1
+    ):
+        return "adapt_question"
     
     # Max answer retries reached, do full restart
     if state["full_restart_count"] < state["max_full_restarts"]:
         return "full_restart"
     
     # Absolute max reached - give up
+    logger.warning(
+        "Ending card generation after validation attempts exhausted: route=%s topic_id=%s "
+        "answer_attempts=%s restarts=%s/%s validation_score=%.2f threshold=%.2f "
+        "math_status=%s",
+        state.get("card_route") or "default",
+        state.get("topic_id"),
+        state.get("answer_attempts"),
+        state.get("full_restart_count"),
+        state.get("max_full_restarts"),
+        float(state.get("validation_score") or 0.0),
+        float(threshold),
+        (state.get("verification_result") or {}).get("status"),
+    )
     return "end"
 
 
@@ -811,6 +1104,13 @@ def decide_after_restart(state: CardGenState) -> str:
     """Decide next step after full restart."""
     if state["full_restart_count"] < state["max_full_restarts"]:
         return "generate_question"
+    logger.warning(
+        "Ending card generation after full restart cap: route=%s topic_id=%s restarts=%s/%s",
+        state.get("card_route") or "default",
+        state.get("topic_id"),
+        state.get("full_restart_count"),
+        state.get("max_full_restarts"),
+    )
     return "end"
 
 
@@ -897,6 +1197,7 @@ def build_card_graph():
         {
             "store_card": "store_card",
             "strengthen": "strengthen",
+            "adapt_question": "adapt_question",
             "full_restart": "full_restart",
             "end": END,
         },
@@ -951,6 +1252,7 @@ def _run_question_phase(
         "topic_label": topic_label,
         "difficulty": difficulty,
         "card_route": "default",
+        "card_route_override": None,
         "route_metadata": {},
         "difficulty_framework": "bloom",
         "difficulty_level_name": "",
@@ -978,10 +1280,12 @@ def _run_question_phase(
         "question_attempts": 0,
         "answer_attempts": 0,
         "full_restart_count": 0,
+        "math_validation_fail_cycles": 0,
         "max_question_attempts": DEFAULT_CONFIG["max_question_attempts"],
         "max_answer_attempts": DEFAULT_CONFIG["max_answer_attempts"],
         "max_full_restarts": DEFAULT_CONFIG["max_full_restarts"],
         "uniqueness_threshold": DEFAULT_CONFIG["uniqueness_threshold"],
+        "uniqueness_top_k": DEFAULT_CONFIG["uniqueness_top_k"],
         "validation_threshold": DEFAULT_CONFIG["validation_threshold"],
         "commit_retry_attempts": DEFAULT_CONFIG["commit_retry_attempts"],
         "commit_retry_sleep_s": DEFAULT_CONFIG["commit_retry_sleep_s"],
@@ -1071,6 +1375,7 @@ def generate_single_card(
     user_id: str = "system",
     store: Optional[VectorStore] = None,
     stop_after_embedding: bool = False,
+    card_route_override: Optional[str] = None,
 ) -> Optional[GeneratedCard]:
     """
     Generate a single card using the LangGraph flow.
@@ -1100,6 +1405,7 @@ def generate_single_card(
         "topic_label": topic_label,
         "difficulty": difficulty,
         "card_route": "default",
+        "card_route_override": card_route_override,
         "route_metadata": {},
         "difficulty_framework": "bloom",
         "difficulty_level_name": "",
@@ -1127,10 +1433,12 @@ def generate_single_card(
         "question_attempts": 0,
         "answer_attempts": 0,
         "full_restart_count": 0,
+        "math_validation_fail_cycles": 0,
         "max_question_attempts": DEFAULT_CONFIG["max_question_attempts"],
         "max_answer_attempts": DEFAULT_CONFIG["max_answer_attempts"],
         "max_full_restarts": DEFAULT_CONFIG["max_full_restarts"],
         "uniqueness_threshold": DEFAULT_CONFIG["uniqueness_threshold"],
+        "uniqueness_top_k": DEFAULT_CONFIG["uniqueness_top_k"],
         "validation_threshold": DEFAULT_CONFIG["validation_threshold"],
         "commit_retry_attempts": DEFAULT_CONFIG["commit_retry_attempts"],
         "commit_retry_sleep_s": DEFAULT_CONFIG["commit_retry_sleep_s"],

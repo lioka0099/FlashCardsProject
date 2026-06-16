@@ -243,6 +243,8 @@ class TopicProficiencyResponse(BaseModel):
     proficiency: float = Field(..., ge=0.0, le=1.0, description="Proficiency score (0.0 to 1.0)")
     last_updated_at: str
     n_reviews: Optional[int] = Field(None, description="Number of reviews contributing to this proficiency")
+    current_difficulty: Optional[int] = Field(None, description="Projected current difficulty for this topic")
+    by_route: Optional[Dict[str, Any]] = Field(None, description="Route-specific proficiency state")
 
 
 class TopicProgressResponse(BaseModel):

@@ -66,6 +66,11 @@ class MathGenerationGraphTests(unittest.TestCase):
             self.assertEqual(out["card_route"], "math_calculation")
             self.assertEqual(out["difficulty_framework"], "tag")
             self.assertEqual(out["difficulty"], 4)
+            self.assertEqual(out["validation_threshold"], graph_mod.DEFAULT_CONFIG["math_validation_threshold"])
+            self.assertEqual(out["uniqueness_threshold"], graph_mod.DEFAULT_CONFIG["math_uniqueness_threshold"])
+            self.assertEqual(out["max_question_attempts"], graph_mod.DEFAULT_CONFIG["math_max_question_attempts"])
+            self.assertEqual(out["max_answer_attempts"], graph_mod.DEFAULT_CONFIG["math_max_answer_attempts"])
+            self.assertEqual(out["max_full_restarts"], graph_mod.DEFAULT_CONFIG["math_max_full_restarts"])
         finally:
             graph_mod.classify_card_route = original  # type: ignore[assignment]
 
@@ -136,6 +141,11 @@ class MathGenerationGraphTests(unittest.TestCase):
 
         self.assertEqual(captured["document_math_profile"]["kind"], "non_math")
         self.assertEqual(out["card_route"], "default")
+        self.assertEqual(out["validation_threshold"], graph_mod.DEFAULT_CONFIG["validation_threshold"])
+        self.assertEqual(out["uniqueness_threshold"], graph_mod.DEFAULT_CONFIG["uniqueness_threshold"])
+        self.assertEqual(out["max_question_attempts"], graph_mod.DEFAULT_CONFIG["max_question_attempts"])
+        self.assertEqual(out["max_answer_attempts"], graph_mod.DEFAULT_CONFIG["max_answer_attempts"])
+        self.assertEqual(out["max_full_restarts"], graph_mod.DEFAULT_CONFIG["max_full_restarts"])
 
     def test_verification_uses_solver_target_over_teacher_target(self) -> None:
         state = {
@@ -189,6 +199,79 @@ class MathGenerationGraphTests(unittest.TestCase):
         self.assertEqual(conceptual["card_route"], "math_conceptual")
         self.assertEqual(conceptual["difficulty_framework"], "bloom")
         self.assertEqual(conceptual["route_metadata"]["math_kind"], "conceptual")
+        self.assertEqual(conceptual["answer_attempts"], 0)
+        self.assertEqual(conceptual["math_validation_fail_cycles"], 0)
+
+    def test_math_validation_failure_adapts_after_answer_attempts_exhausted(self) -> None:
+        state = {
+            "card_route": "math_calculation",
+            "topic_id": "t1",
+            "validation_score": 0.99,
+            "validation_threshold": graph_mod.DEFAULT_CONFIG["math_validation_threshold"],
+            "validation_critique": "ok grounding",
+            "verification_result": {"status": "failed"},
+            "math_validation_passed": False,
+            "math_validation_fail_cycles": 2,
+            "answer_attempts": graph_mod.DEFAULT_CONFIG["math_max_answer_attempts"],
+            "max_answer_attempts": graph_mod.DEFAULT_CONFIG["math_max_answer_attempts"],
+            "full_restart_count": 0,
+            "max_full_restarts": graph_mod.DEFAULT_CONFIG["math_max_full_restarts"],
+        }
+        self.assertEqual(graph_mod.decide_after_validation(state), "adapt_question")  # type: ignore[arg-type]
+
+    def test_math_question_spec_failure_adapts_without_full_restart(self) -> None:
+        state = {
+            "card_route": "math_calculation",
+            "topic_id": "t1",
+            "question": "",
+            "question_generation_failed": True,
+            "question_failure_reason": "invalid_spec: equation target missing equation",
+            "question_attempts": graph_mod.DEFAULT_CONFIG["math_max_question_attempts"],
+            "max_question_attempts": graph_mod.DEFAULT_CONFIG["math_max_question_attempts"],
+            "full_restart_count": 0,
+            "max_full_restarts": graph_mod.DEFAULT_CONFIG["math_max_full_restarts"],
+        }
+
+        self.assertEqual(graph_mod.decide_after_question_generation(state), "adapt_question")  # type: ignore[arg-type]
+
+    def test_default_validation_failure_still_restarts_after_answer_attempts(self) -> None:
+        state = {
+            "card_route": "default",
+            "topic_id": "t1",
+            "validation_score": 0.1,
+            "validation_threshold": graph_mod.DEFAULT_CONFIG["validation_threshold"],
+            "validation_critique": "not grounded",
+            "verification_result": {"status": "not_applicable"},
+            "math_validation_passed": True,
+            "answer_attempts": graph_mod.DEFAULT_CONFIG["max_answer_attempts"],
+            "max_answer_attempts": graph_mod.DEFAULT_CONFIG["max_answer_attempts"],
+            "full_restart_count": 0,
+            "max_full_restarts": graph_mod.DEFAULT_CONFIG["max_full_restarts"],
+        }
+        self.assertEqual(graph_mod.decide_after_validation(state), "full_restart")  # type: ignore[arg-type]
+
+    def test_math_threshold_relaxes_grounding_but_keeps_verifier_required(self) -> None:
+        ok_state = {
+            "card_route": "math_calculation",
+            "topic_id": "t1",
+            "validation_score": graph_mod.DEFAULT_CONFIG["math_validation_threshold"],
+            "validation_threshold": graph_mod.DEFAULT_CONFIG["math_validation_threshold"],
+            "verification_result": {"status": "verified"},
+            "math_validation_passed": True,
+        }
+        self.assertEqual(graph_mod.decide_after_validation(ok_state), "store_card")  # type: ignore[arg-type]
+
+        verifier_failed_state = {
+            **ok_state,
+            "verification_result": {"status": "failed"},
+            "math_validation_passed": False,
+            "math_validation_fail_cycles": 1,
+            "answer_attempts": 1,
+            "max_answer_attempts": graph_mod.DEFAULT_CONFIG["math_max_answer_attempts"],
+            "full_restart_count": 0,
+            "max_full_restarts": graph_mod.DEFAULT_CONFIG["math_max_full_restarts"],
+        }
+        self.assertEqual(graph_mod.decide_after_validation(verifier_failed_state), "strengthen")  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

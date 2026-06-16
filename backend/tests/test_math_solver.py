@@ -12,6 +12,20 @@ class MathSolverTests(unittest.TestCase):
         self.assertEqual(result.final_answer, "2*x + 3")
         self.assertEqual(result.verification_target["expected"], "2*x + 3")
 
+    def test_derivative_from_normalized_spec_shape(self) -> None:
+        result = solve_math_problem(
+            {
+                "status": "ready",
+                "kind": "derivative",
+                "source_rule": "Use the power rule.",
+                "expression": "x^2 + 3x",
+                "variable": "x",
+            }
+        )
+        self.assertEqual(result.status, "solved")
+        self.assertEqual(result.final_answer, "2*x + 3")
+        self.assertEqual(result.verification_target["expression"], "x**2 + 3*x")
+
     def test_equation(self) -> None:
         result = solve_math_problem(
             {"verification_target": {"kind": "equation", "equation": "2*x + 3 = 7", "variable": "x"}}
@@ -44,6 +58,21 @@ class MathSolverTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "solved")
         self.assertEqual(result.final_answer, "7")
+
+    def test_simplify_from_normalized_spec_shape(self) -> None:
+        result = solve_math_problem(
+            {
+                "kind": "simplify",
+                "source_rule": "Combine like terms.",
+                "expression": "x + x + 1",
+            }
+        )
+        self.assertEqual(result.status, "solved")
+        self.assertEqual(result.final_answer, "2*x + 1")
+
+    def test_invalid_spec_status_for_bad_top_level_spec(self) -> None:
+        result = solve_math_problem({"kind": "equation", "equation": "2*x + 3"})
+        self.assertEqual(result.status, "invalid_spec")
 
     def test_unsupported(self) -> None:
         result = solve_math_problem({"verification_target": {"kind": "geometry_proof"}})

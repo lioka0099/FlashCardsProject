@@ -2054,6 +2054,35 @@ class DBRepository:
                     )
                 )
     
+    def has_equivalent_question_text(self, *, exam_id: str, question_text: str) -> bool:
+        """Return True when a normalized question text already exists in exam index."""
+        normalized = " ".join(str(question_text or "").strip().lower().split())
+        if not normalized:
+            return False
+        with get_db() as db:
+            rows = (
+                db.query(QuestionIndexEntry.question_text)
+                .filter(QuestionIndexEntry.exam_id == exam_id)
+                .all()
+            )
+            for (existing_text,) in rows:
+                existing_norm = " ".join(str(existing_text or "").strip().lower().split())
+                if existing_norm == normalized:
+                    return True
+            return False
+
+    def list_question_texts_for_exam(self, *, exam_id: str, limit: int = 200) -> List[str]:
+        """List recent indexed question texts for an exam."""
+        with get_db() as db:
+            rows = (
+                db.query(QuestionIndexEntry.question_text)
+                .filter(QuestionIndexEntry.exam_id == exam_id)
+                .order_by(QuestionIndexEntry.created_at.desc())
+                .limit(max(1, int(limit)))
+                .all()
+            )
+            return [str(text or "") for (text,) in rows if str(text or "").strip()]
+
     # =========================================================================
     # EVENT METHODS
     # =========================================================================

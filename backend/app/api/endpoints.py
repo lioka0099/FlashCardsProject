@@ -562,6 +562,8 @@ async def topic_progress_endpoint(exam_id: str, user_id: str = Query(...)):
                 proficiency=float(p.proficiency),
                 last_updated_at=p.last_updated_at,
                 n_reviews=int(p.seen_count),
+                current_difficulty=int(p.current_difficulty),
+                by_route=(p.info or {}).get("route_proficiency") if isinstance(p.info, dict) else None,
             )
         )
     overall = (sum(x.proficiency for x in payload) / len(payload)) if payload else None

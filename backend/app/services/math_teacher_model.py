@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+import numpy as np
 
 from app.api.schemas import ProofSpan
 from app.data.vector_store import VectorStore
@@ -41,12 +43,15 @@ class MathTeacherModelService:
         min_score: float,
         store: VectorStore,
         allowed_chunk_ids: list[str],
+        solver_payload: Optional[Dict[str, Any]] = None,
+        query_vec: Optional[np.ndarray] = None,
     ) -> MathTeacherModelResult:
         proofs_all = retrieve_with_proofs(
             question,
             k=max(k, 8),
             store=store,
             allowed_chunk_ids=allowed_chunk_ids,
+            query_vec=query_vec,
         )
         proofs_all = sorted(
             proofs_all,
@@ -60,20 +65,24 @@ class MathTeacherModelService:
         prompt_proofs, proof_artifacts = _condense_proofs(question, "", proofs)
         context = _build_context(prompt_proofs, max_chars=12000)
 
+        solver = solver_payload or {}
         sys_prompt = (
             "You write worked solutions for math calculation flashcards.\n"
             "Use ONLY the provided sources for the rule, formula, values, and procedure.\n"
+            "Use the deterministic solver result as authoritative for the computation.\n"
             "Return JSON only."
         )
         user_prompt = (
             f"QUESTION:\n{question}\n\n"
             f"QUESTION STRUCTURE:\n{json.dumps(question_payload, ensure_ascii=True)}\n\n"
+            f"DETERMINISTIC SOLVER RESULT:\n{json.dumps(solver, ensure_ascii=True)}\n\n"
             f"SOURCES:\n{context}\n\n"
             "Write a concise worked solution.\n"
             "Rules:\n"
             "- Use only the provided sources and the givens in the question.\n"
             "- Include step-by-step work.\n"
-            "- Include a clear final answer.\n"
+            "- Use the solver's solution_steps and final_answer for the computation.\n"
+            "- Include a clear final answer matching the solver final_answer exactly.\n"
             "- Keep the solution flashcard-friendly, not a long lecture.\n"
             "- Use SymPy-compatible syntax for final_answer and verification_target fields where possible.\n\n"
             "Return JSON with this schema:\n"
@@ -114,6 +123,12 @@ class MathTeacherModelService:
         final_proofs, _ = _condense_proofs(question, answer, proofs, artifacts=proof_artifacts)
         display_proofs = _select_display_proofs(question, answer, final_proofs)
         payload["answer"] = answer
-        payload.setdefault("verification_target", question_payload.get("verification_target") or {})
+        if solver.get("final_answer"):
+            payload["final_answer"] = str(solver["final_answer"])
+        payload.setdefault(
+            "solution_steps",
+            solver.get("solution_steps") if isinstance(solver.get("solution_steps"), list) else [],
+        )
+        payload["verification_target"] = solver.get("verification_target") or question_payload.get("verification_target") or {}
         return MathTeacherModelResult(answer=answer, proofs=display_proofs, payload=payload)
 

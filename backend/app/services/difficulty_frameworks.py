@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Literal
 
 
-CardRoute = Literal["default", "math_calculation"]
+CardRoute = Literal["default", "math_calculation", "math_conceptual"]
 DifficultyFramework = Literal["bloom", "tag"]
 
 

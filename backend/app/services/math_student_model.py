@@ -22,6 +22,10 @@ def _safe_json_load(raw: str) -> Dict[str, Any]:
         return {}
 
 
+def _nonempty_list(value: Any) -> bool:
+    return isinstance(value, list) and any(str(item).strip() for item in value)
+
+
 @dataclass
 class MathStudentModelService:
     """Generates grounded math calculation flashcard questions."""
@@ -46,7 +50,8 @@ class MathStudentModelService:
 
         sys_prompt = (
             "You write math calculation flashcard questions only.\n"
-            "Use ONLY the provided excerpts for formulas, values, variables, and procedures.\n"
+            "Use the provided excerpts for formulas, relationships, and procedures.\n"
+            "You may introduce simple numeric givens when needed to make a solvable practice problem.\n"
             "Reject conceptual-only questions. Return JSON only."
         )
         user_prompt = (
@@ -62,15 +67,20 @@ class MathStudentModelService:
             "Rules:\n"
             "- The question must require actual mathematical work.\n"
             "- Include all givens needed to solve it.\n"
-            "- Use only formulas, values, variables, and procedures grounded in the excerpts.\n"
+            "- Ground formulas, relationships, and procedures in the excerpts.\n"
+            "- Do not invent arithmetic solely from incidental numbers in the excerpts.\n"
+            "- You may invent small integer or simple fractional givens only when the excerpt teaches a math rule, formula, relationship, or procedure.\n"
+            "- Every invented numeric given must be supported by a source_rules entry copied or paraphrased from the excerpts.\n"
+            "- Keep generated givens simple enough for a flashcard and do not introduce topics outside the excerpts.\n"
             "- Do not ask conceptual questions like 'What is a derivative?' or 'Explain slope'.\n"
             "- Prefer problem types SymPy can verify: arithmetic, simplify, equivalence, equation, system, derivative, integral.\n"
-            "- If the excerpts do not support a grounded calculation problem, return {\"question\": \"\", \"reason\": \"insufficient evidence\"}.\n\n"
+            "- Return insufficient evidence when no relevant formula, relationship, rule, or procedure is present.\n\n"
             "Return JSON with this schema:\n"
             "{\n"
             '  "question": "...",\n'
             '  "problem_type": "derivative|integral|equation|system|simplify|equivalence|arithmetic|substitution",\n'
             '  "givens": ["..."],\n'
+            '  "generated_givens": ["..."],\n'
             '  "source_rules": ["..."],\n'
             '  "expected_operation": "...",\n'
             '  "verification_target": {\n'
@@ -100,6 +110,8 @@ class MathStudentModelService:
         question = str(payload.get("question") or "").strip()
         if not question:
             raise ValueError(str(payload.get("reason") or "Math question generation returned no question."))
+        if not _nonempty_list(payload.get("source_rules")):
+            raise ValueError("Insufficient evidence: generated math question did not cite a source rule.")
         payload["question"] = question
         payload.setdefault("tag_level", level.level)
         payload.setdefault("tag_level_name", level.name)

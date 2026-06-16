@@ -33,6 +33,7 @@ from app.services.difficulty_frameworks import (
 from app.services.math_student_model import MathStudentModelService
 from app.services.math_teacher_model import MathTeacherModelService
 from app.services.math_verification import verify_math_solution
+from app.services.math_solver import solve_math_problem
 from app.services.llm import (
     chat_completions_create,
     CHAT_MODEL,
@@ -229,6 +230,7 @@ class CardGenState(TypedDict):
     question_generation_failed: bool
     question_failure_reason: Optional[str]
     math_question_payload: Dict[str, Any]
+    math_solver_payload: Dict[str, Any]
     question_embedding: Optional[np.ndarray]
     question_id: Optional[str]
     is_unique: bool
@@ -280,6 +282,7 @@ def node_generate_question(state: CardGenState) -> CardGenState:
     route = state.get("card_route") or "default"
     question = ""
     math_payload: Dict[str, Any] = {}
+    math_solver_payload: Dict[str, Any] = {}
     failed = False
     failure_reason = None
     try:
@@ -293,6 +296,12 @@ def node_generate_question(state: CardGenState) -> CardGenState:
             )
             question = result.question
             math_payload = result.payload
+            solver_result = solve_math_problem(math_payload)
+            math_solver_payload = solver_result.to_info()
+            if solver_result.status != "solved":
+                raise ValueError(f"Math solver could not solve generated question: {solver_result.status}")
+            math_payload["verification_target"] = solver_result.verification_target
+            math_payload["expected_final_answer"] = solver_result.final_answer
         else:
             question = StudentModelService().generate_question(
                 topic_label=state["topic_label"],
@@ -309,6 +318,7 @@ def node_generate_question(state: CardGenState) -> CardGenState:
         "question_generation_failed": failed or not bool(question),
         "question_failure_reason": failure_reason,
         "math_question_payload": math_payload,
+        "math_solver_payload": math_solver_payload,
         "question_attempts": state["question_attempts"] + 1,
     }
 
@@ -317,7 +327,12 @@ def node_route_card(state: CardGenState) -> CardGenState:
     """Choose default vs math-calculation generation for this topic/context."""
     store = VectorStore(basepath=state["store_basepath"])
     topic_info: Dict[str, Any] = {}
+    document_math_profile: Optional[Dict[str, Any]] = None
     try:
+        exam = store.db.get_exam(state["exam_id"])
+        if exam is not None and isinstance(exam.info, dict):
+            raw_profile = exam.info.get("math_profile")
+            document_math_profile = raw_profile if isinstance(raw_profile, dict) else {"kind": "non_math"}
         topics = store.db.list_topics(exam_id=state["exam_id"])
         topic_info = next((t.info or {} for t in topics if t.topic_id == state["topic_id"]), {})
     except Exception:
@@ -327,6 +342,8 @@ def node_route_card(state: CardGenState) -> CardGenState:
         topic_label=state["topic_label"],
         context_pack=state["context_pack"],
         cached_topic_route=cached_route if isinstance(cached_route, dict) else None,
+        document_math_profile=document_math_profile,
+        store=store,
     )
     framework = framework_for_route(decision.card_route)
     difficulty = clamp_difficulty(framework, state["difficulty"])
@@ -485,6 +502,8 @@ def node_generate_answer(state: CardGenState) -> CardGenState:
             min_score=state["min_score"],
             store=store,
             allowed_chunk_ids=state["allowed_chunk_ids"],
+            solver_payload=state.get("math_solver_payload") or {},
+            query_vec=state.get("question_embedding"),
         )
         answer = math_result.answer
         proofs = math_result.proofs
@@ -496,6 +515,7 @@ def node_generate_answer(state: CardGenState) -> CardGenState:
             min_score=state["min_score"],
             store=store,
             allowed_chunk_ids=state["allowed_chunk_ids"],
+            query_vec=state.get("question_embedding"),
         )
         answer = result.answer
         proofs = result.proofs
@@ -547,10 +567,14 @@ def node_verify_math(state: CardGenState) -> CardGenState:
             },
             "math_validation_passed": True,
         }
-    result = verify_math_solution(
-        state.get("math_question_payload") or {},
-        state.get("math_answer_payload") or {},
-    )
+    question_payload = dict(state.get("math_question_payload") or {})
+    answer_payload = dict(state.get("math_answer_payload") or {})
+    solver_payload = state.get("math_solver_payload") or {}
+    solver_target = solver_payload.get("verification_target") if isinstance(solver_payload, dict) else None
+    if isinstance(solver_target, dict) and solver_target:
+        question_payload["verification_target"] = solver_target
+        answer_payload["verification_target"] = solver_target
+    result = verify_math_solution(question_payload, answer_payload)
     return {
         **state,
         "verification_result": result.to_info(),
@@ -564,6 +588,63 @@ def node_strengthen(state: CardGenState) -> CardGenState:
         **state,
         "k": state["k"] + state["strengthen_k_delta"],
         "min_score": max(0.2, state["min_score"] - state["strengthen_min_score_delta"]),
+    }
+
+
+def _is_insufficient_math_failure(state: CardGenState) -> bool:
+    if state.get("card_route") != "math_calculation":
+        return False
+    reason = str(state.get("question_failure_reason") or "").lower()
+    return "insufficient evidence" in reason or "could not solve generated question" in reason
+
+
+def node_adapt_math_question_failure(state: CardGenState) -> CardGenState:
+    """Lower math difficulty, then fall back to conceptual math if calculation still starves."""
+    if state.get("card_route") != "math_calculation":
+        return state
+
+    if int(state.get("difficulty") or 1) > 1:
+        difficulty = clamp_difficulty("tag", int(state["difficulty"]) - 1)
+        level = get_level("tag", difficulty)
+        return {
+            **state,
+            "difficulty": difficulty,
+            "difficulty_level_name": level.name,
+            "question": None,
+            "question_generation_failed": False,
+            "question_failure_reason": None,
+            "math_question_payload": {},
+            "math_solver_payload": {},
+            "question_attempts": 0,
+        }
+
+    framework = framework_for_route("math_conceptual")
+    difficulty = clamp_difficulty(framework, state.get("difficulty") or 1)
+    level = get_level(framework, difficulty)
+    route_metadata = dict(state.get("route_metadata") or {})
+    route_metadata.update(
+        {
+            "card_route": "math_conceptual",
+            "subject_type": "math",
+            "math_kind": "conceptual",
+            "reason": "Calculation generation repeatedly lacked solvable evidence; falling back to conceptual math.",
+            "adapted_from": "math_calculation",
+        }
+    )
+    return {
+        **state,
+        "card_route": "math_conceptual",
+        "route_metadata": route_metadata,
+        "difficulty_framework": framework,
+        "difficulty": difficulty,
+        "difficulty_level_name": level.name,
+        "validation_threshold": DEFAULT_CONFIG["validation_threshold"],
+        "question": None,
+        "question_generation_failed": False,
+        "question_failure_reason": None,
+        "math_question_payload": {},
+        "math_solver_payload": {},
+        "question_attempts": 0,
     }
 
 
@@ -601,6 +682,7 @@ def node_store_card(state: CardGenState) -> CardGenState:
                 "expected_final_answer": math_answer.get("final_answer"),
                 "math_question": math_question,
                 "math_answer": math_answer,
+                "math_solver": state.get("math_solver_payload") or {},
             }
         )
 
@@ -661,6 +743,7 @@ def node_full_restart(state: CardGenState) -> CardGenState:
         "verification_result": {},
         "math_validation_passed": False,
         "math_question_payload": {},
+        "math_solver_payload": {},
         "math_answer_payload": {},
         "question_generation_failed": False,
         "question_failure_reason": None,
@@ -681,6 +764,8 @@ def decide_after_question_generation(state: CardGenState) -> str:
         return "embed_question"
     if state["question_attempts"] < state["max_question_attempts"]:
         return "generate_question"
+    if _is_insufficient_math_failure(state):
+        return "adapt_question"
     if state["full_restart_count"] < state["max_full_restarts"]:
         return "full_restart"
     return "end"
@@ -753,6 +838,7 @@ def build_card_graph():
     g.add_node("validate", node_validate)
     g.add_node("verify_math", node_verify_math)
     g.add_node("strengthen", node_strengthen)
+    g.add_node("adapt_question", node_adapt_math_question_failure)
     g.add_node("store_card", node_store_card)
     g.add_node("commit_question_index", node_commit_question_index)
     g.add_node("full_restart", node_full_restart)
@@ -772,10 +858,12 @@ def build_card_graph():
         {
             "embed_question": "embed_question",
             "generate_question": "generate_question",
+            "adapt_question": "adapt_question",
             "full_restart": "full_restart",
             "end": END,
         },
     )
+    g.add_edge("adapt_question", "generate_question")
 
     g.add_edge("store_card", "commit_question_index")
     g.add_edge("commit_question_index", END)
@@ -875,6 +963,7 @@ def _run_question_phase(
         "question_generation_failed": False,
         "question_failure_reason": None,
         "math_question_payload": {},
+        "math_solver_payload": {},
         "question_embedding": None,
         "question_id": None,
         "is_unique": False,
@@ -1023,6 +1112,7 @@ def generate_single_card(
         "question_generation_failed": False,
         "question_failure_reason": None,
         "math_question_payload": {},
+        "math_solver_payload": {},
         "question_embedding": None,
         "question_id": None,
         "is_unique": False,

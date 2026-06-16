@@ -1,5 +1,6 @@
 import unittest
 
+from app.data.db_repository import StoredExam, StoredTopic
 from app.services import graph as graph_mod
 
 
@@ -67,6 +68,127 @@ class MathGenerationGraphTests(unittest.TestCase):
             self.assertEqual(out["difficulty"], 4)
         finally:
             graph_mod.classify_card_route = original  # type: ignore[assignment]
+
+    def test_route_node_passes_exam_math_profile(self) -> None:
+        original_classifier = graph_mod.classify_card_route
+        original_store = graph_mod.VectorStore
+        captured = {}
+
+        class FakeDB:
+            def get_exam(self, _exam_id):
+                return StoredExam(
+                    exam_id="e1",
+                    user_id="u1",
+                    title="Exam",
+                    mode="mastery",
+                    created_at="",
+                    updated_at="",
+                    info={"math_profile": {"kind": "non_math", "confidence": 0.95}},
+                )
+
+            def list_topics(self, *, exam_id):
+                return [
+                    StoredTopic(
+                        topic_id="t1",
+                        exam_id=exam_id,
+                        label="Topic",
+                        created_at="",
+                        info={"route_candidate": {"card_route": "math_calculation", "confidence": 0.9}},
+                    )
+                ]
+
+        class FakeStore:
+            def __init__(self, **_kwargs):
+                self.db = FakeDB()
+
+        class FakeDecision:
+            card_route = "default"
+
+            def to_info(self):
+                return {
+                    "card_route": "default",
+                    "subject_type": "general",
+                    "math_kind": "none",
+                    "confidence": 0.95,
+                }
+
+        def fake_classifier(**kwargs):
+            captured.update(kwargs)
+            return FakeDecision()
+
+        try:
+            graph_mod.VectorStore = FakeStore  # type: ignore[assignment]
+            graph_mod.classify_card_route = fake_classifier  # type: ignore[assignment]
+            out = graph_mod.node_route_card(
+                {
+                    "store_basepath": "store",
+                    "exam_id": "e1",
+                    "topic_id": "t1",
+                    "topic_label": "Derivatives",
+                    "context_pack": "f(x)=x^2, differentiate.",
+                    "difficulty": 3,
+                    "validation_threshold": 0.7,
+                }
+            )  # type: ignore[arg-type]
+        finally:
+            graph_mod.classify_card_route = original_classifier  # type: ignore[assignment]
+            graph_mod.VectorStore = original_store  # type: ignore[assignment]
+
+        self.assertEqual(captured["document_math_profile"]["kind"], "non_math")
+        self.assertEqual(out["card_route"], "default")
+
+    def test_verification_uses_solver_target_over_teacher_target(self) -> None:
+        state = {
+            "card_route": "math_calculation",
+            "math_question_payload": {
+                "verification_target": {
+                    "kind": "derivative",
+                    "expression": "x**2 + 3*x",
+                    "variable": "x",
+                }
+            },
+            "math_solver_payload": {
+                "final_answer": "2*x + 3",
+                "verification_target": {
+                    "kind": "derivative",
+                    "expression": "x**2 + 3*x",
+                    "variable": "x",
+                    "expected": "2*x + 3",
+                },
+            },
+            "math_answer_payload": {
+                "final_answer": "2*x",
+                "verification_target": {"kind": "equivalence", "expected": "2*x"},
+            },
+        }
+        out = graph_mod.node_verify_math(state)  # type: ignore[arg-type]
+        self.assertFalse(out["math_validation_passed"])
+        self.assertEqual(out["verification_result"]["status"], "failed")
+
+    def test_math_failure_adapts_to_lower_difficulty_then_conceptual(self) -> None:
+        lowered = graph_mod.node_adapt_math_question_failure(
+            {
+                "card_route": "math_calculation",
+                "difficulty": 3,
+                "route_metadata": {},
+                "question_failure_reason": "insufficient evidence",
+            }
+        )  # type: ignore[arg-type]
+        self.assertEqual(lowered["card_route"], "math_calculation")
+        self.assertEqual(lowered["difficulty"], 2)
+        self.assertEqual(lowered["question_attempts"], 0)
+
+        conceptual = graph_mod.node_adapt_math_question_failure(
+            {
+                "card_route": "math_calculation",
+                "difficulty": 1,
+                "route_metadata": {"confidence": 0.7},
+                "question_failure_reason": "insufficient evidence",
+            }
+        )  # type: ignore[arg-type]
+        self.assertEqual(conceptual["card_route"], "math_conceptual")
+        self.assertEqual(conceptual["difficulty_framework"], "bloom")
+        self.assertEqual(conceptual["route_metadata"]["math_kind"], "conceptual")
 
 
 if __name__ == "__main__":

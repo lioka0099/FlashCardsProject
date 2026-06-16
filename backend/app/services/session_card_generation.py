@@ -115,6 +115,8 @@ class SessionCardGenerationService:
         exam = self.repo.get_exam(exam_id)
         if exam is None:
             return None
+        raw_profile = (exam.info or {}).get("math_profile") if isinstance(exam.info, dict) else None
+        document_math_profile = raw_profile if isinstance(raw_profile, dict) else {"kind": "non_math"}
         if store.vector_backend == "pinecone":
             store.set_namespace(pinecone_namespace(user_id=user_id, exam_id=exam_id))
 
@@ -152,6 +154,8 @@ class SessionCardGenerationService:
                     topic_label=choice.topic_label,
                     context_pack=context_pack,
                     cached_topic_route=choice.cached_route if isinstance(choice.cached_route, dict) else None,
+                    document_math_profile=document_math_profile,
+                    store=store,
                 )
                 if card_type == "diagnostic":
                     difficulty = 1
@@ -465,6 +469,13 @@ class SessionCardGenerationService:
             return 1
         if card_route == "math_calculation":
             fallback = default_route_state(card_route="math_calculation", current_difficulty=1)
+        elif card_route == "math_conceptual":
+            fallback = default_route_state(
+                card_route="math_conceptual",
+                current_difficulty=prof.current_difficulty,
+                seen_count=prof.seen_count,
+                correctish_count=prof.correctish_count,
+            )
         else:
             fallback = default_route_state(
                 card_route="default",

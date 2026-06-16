@@ -68,7 +68,12 @@ def _verify_arithmetic(target: Dict[str, Any], final_answer: Any) -> Verificatio
     expression = target.get("expression")
     expected = target.get("expected")
     if expected is None and expression is not None:
-        expected = sp.N(_parse_expr(expression))
+        expr = _parse_expr(expression)
+        substitutions = target.get("substitutions") or target.get("values")
+        if isinstance(substitutions, dict):
+            sub_map = {sp.Symbol(str(k)): _parse_expr(v) for k, v in substitutions.items()}
+            expr = expr.subs(sub_map)
+        expected = sp.N(expr) if not expr.free_symbols else sp.simplify(expr)
     if expected is None:
         return _unsupported("arithmetic target missing expression or expected answer", target)
     tolerance = float(target.get("tolerance") or 1e-6)
@@ -125,7 +130,8 @@ def _verify_equation(target: Dict[str, Any], final_answer: Any) -> VerificationR
     variable = str(target.get("variable") or "x")
     expected = target.get("expected")
     if expected is not None:
-        ok = _equivalent(final_answer, expected)
+        actual = _extract_assignment_value(final_answer, variable)
+        ok = _equivalent(actual, expected)
         return _checked(ok, {"kind": "equation", "expected": str(expected), "actual": str(final_answer)})
     if not equation:
         return _unsupported("equation target missing equation or expected answer", target)

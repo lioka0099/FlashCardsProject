@@ -45,6 +45,26 @@ class MathVerificationTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "failed")
 
+    def test_substitution_with_values(self) -> None:
+        result = verify_math_solution(
+            {
+                "verification_target": {
+                    "kind": "substitution",
+                    "expression": "2*x + 1",
+                    "substitutions": {"x": 3},
+                }
+            },
+            {"final_answer": "7"},
+        )
+        self.assertEqual(result.status, "verified")
+
+    def test_missing_final_answer_is_parse_error(self) -> None:
+        result = verify_math_solution(
+            {"verification_target": {"kind": "arithmetic", "expression": "2 + 2"}},
+            {},
+        )
+        self.assertEqual(result.status, "parse_error")
+
 
 if __name__ == "__main__":
     unittest.main()

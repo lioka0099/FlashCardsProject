@@ -3,6 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import numpy as np
+
 # Configure dedicated test database before importing app modules.
 _TEST_ROOT = Path(tempfile.mkdtemp(prefix="phase3_diagnostic_lifecycle_"))
 os.environ["DATABASE_URL"] = f"sqlite:///{(_TEST_ROOT / 'meta.sqlite').as_posix()}"
@@ -28,6 +30,30 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         drop_all_tables()
         init_db()
         self.client = TestClient(app)
+        from app.services import diagnostic_lifecycle as dl_mod
+        from app.services import ingestion as ingestion_mod
+
+        self._dl_mod = dl_mod
+        self._ingestion_mod = ingestion_mod
+        self._original_classifier = dl_mod.classify_document_math_profile
+        self._original_embed_texts = ingestion_mod.embed_texts
+
+        class FakeMathProfile:
+            def to_info(self):
+                return {
+                    "kind": "non_math",
+                    "label": "CONCEPTUAL",
+                    "confidence": 0.95,
+                    "reason": "unit test default",
+                    "source": "test",
+                }
+
+        dl_mod.classify_document_math_profile = lambda **_kwargs: FakeMathProfile()  # type: ignore[assignment]
+        ingestion_mod.embed_texts = lambda texts: np.ones((len(texts), 3072), dtype="float32")  # type: ignore[assignment]
+
+    def tearDown(self) -> None:
+        self._dl_mod.classify_document_math_profile = self._original_classifier  # type: ignore[assignment]
+        self._ingestion_mod.embed_texts = self._original_embed_texts  # type: ignore[assignment]
 
     def test_bootstrap_and_atomic_transition(self) -> None:
         from app.services import diagnostic_lifecycle as dl_mod
@@ -131,6 +157,66 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         finally:
             dl_mod.build_topics_for_exam = original_build_topics
             dl_mod.generate_starter_cards_v2 = original_generate
+
+    def test_bootstrap_persists_math_profile_before_topic_build(self) -> None:
+        from app.services import diagnostic_lifecycle as dl_mod
+
+        original_build_topics = dl_mod.build_topics_for_exam
+        original_generate = dl_mod.generate_starter_cards_v2
+        captured = {}
+
+        def fake_build_topics_for_exam(*, exam_id, store, overwrite=True):
+            exam = store.db.get_exam(exam_id)
+            captured["math_profile"] = (exam.info or {}).get("math_profile") if exam else None
+            store.db.upsert_topic(topic_id="tA", exam_id=exam_id, label="Topic A", info={"n_chunks": 1})
+            return [{"topic_id": "tA", "label": "Topic A"}]
+
+        def fake_generate_starter_cards_v2(*, exam_id, user_id, n, difficulty, card_type="learning", store=None, max_workers=5):
+            assert store is not None
+            store.db.upsert_card(
+                card_id="diag_card_profile",
+                exam_id=exam_id,
+                topic_id="tA",
+                question="Q",
+                answer="A",
+                difficulty=1,
+                card_type="diagnostic",
+                status="active",
+                info={"source": "test"},
+            )
+            store.db.replace_card_topics(
+                card_id="diag_card_profile",
+                topics=[{"topic_id": "tA", "role": "primary", "weight": 1.0}],
+            )
+            return [
+                GeneratedCard(
+                    card_id="diag_card_profile",
+                    exam_id=exam_id,
+                    topic_id="tA",
+                    topic_label="Topic A",
+                    question="Q",
+                    answer="A",
+                    difficulty=1,
+                    proofs=[],
+                )
+            ]
+
+        dl_mod.build_topics_for_exam = fake_build_topics_for_exam
+        dl_mod.generate_starter_cards_v2 = fake_generate_starter_cards_v2
+        try:
+            d1 = _write_text_doc("p3_math_profile_timing.txt", "44 examples and 100 rows, but conceptual notes.")
+            resp = self.client.post(
+                "/exams/from-upload",
+                data={"user_id": "u-profile", "title": "Profile timing", "mode": "mastery"},
+                files=[("files", ("p3_math_profile_timing.txt", Path(d1).read_text(encoding="utf-8"), "text/plain"))],
+            )
+            self.assertEqual(resp.status_code, 200)
+        finally:
+            dl_mod.build_topics_for_exam = original_build_topics
+            dl_mod.generate_starter_cards_v2 = original_generate
+
+        self.assertIsNotNone(captured["math_profile"])
+        self.assertEqual(captured["math_profile"]["kind"], "non_math")
 
     def test_failed_bootstrap_cleans_up_exam_data(self) -> None:
         from app.services import diagnostic_lifecycle as dl_mod

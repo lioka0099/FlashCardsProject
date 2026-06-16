@@ -11,6 +11,7 @@ from app.data.pinecone_backend import PineconeClient, pinecone_namespace
 from app.data.db_repository import DBRepository, StoredExam
 from app.data.vector_store import VectorStore
 from app.services.cards import GeneratedCard
+from app.services.document_math_profile import classify_document_math_profile
 from app.services.exams import create_exam
 from app.services.graph import generate_starter_cards_v2
 from app.services.ingestion import UnsupportedDocumentTypeError, ingest_documents
@@ -94,6 +95,14 @@ class DiagnosticLifecycleService:
             )
             doc_ids = [x.doc_id for x in ingest_results]
             self.repo.attach_documents_to_exam(exam_id=exam_id, doc_ids=doc_ids)
+            chunks = []
+            for doc_id in doc_ids:
+                chunks.extend(self.repo.list_chunks_by_doc(doc_id))
+            math_profile = classify_document_math_profile(chunks=chunks)
+            self.repo.update_exam_lifecycle(
+                exam_id=exam_id,
+                info_patch={"math_profile": math_profile.to_info()},
+            )
         except UnsupportedDocumentTypeError:
             self._cleanup_failed_bootstrap(user_id=user_id, exam_id=exam_id)
             raise

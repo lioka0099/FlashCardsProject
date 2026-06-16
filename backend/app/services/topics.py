@@ -708,6 +708,7 @@ def build_topics_for_exam(
     doc_ids = ws.doc_ids
     if not doc_ids:
         return []
+    document_math_profile = (ws.exam.info or {}).get("math_profile") if isinstance(ws.exam.info, dict) else None
 
     # 1) collect chunks
     chunks: List[StoredChunk] = []
@@ -837,6 +838,8 @@ def build_topics_for_exam(
             route_decision = classify_topic_route(
                 topic_label=label,
                 representative_context=route_context or "\n".join(texts[:4]),
+                document_math_profile=document_math_profile if isinstance(document_math_profile, dict) else None,
+                store=store,
             )
             info["route_candidate"] = route_decision.to_info()
         except Exception:

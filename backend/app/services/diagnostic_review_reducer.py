@@ -217,7 +217,8 @@ class DiagnosticReviewReducer:
 
         state = exam.state
         diagnostic_total = int(exam.diagnostic_total or 0)
-        if all_topics_diagnosed(repo=self.repo, user_id=user_id, exam_id=exam_id):
+        diagnostic_complete = diagnostic_total > 0 and diagnostic_answered >= diagnostic_total
+        if diagnostic_complete or all_topics_diagnosed(repo=self.repo, user_id=user_id, exam_id=exam_id):
             state = "active_learning"
             self.repo.update_exam_lifecycle(
                 exam_id=exam_id,

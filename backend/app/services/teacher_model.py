@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
+
+import numpy as np
 
 from app.api.schemas import ProofSpan
 from app.data.vector_store import VectorStore
@@ -26,6 +28,7 @@ class TeacherModelService:
         min_score: float,
         store: VectorStore,
         allowed_chunk_ids: list[str],
+        query_vec: Optional[np.ndarray] = None,
     ) -> TeacherModelResult:
         result = generate_answer(
             question=question,
@@ -33,5 +36,6 @@ class TeacherModelService:
             min_score=min_score,
             store=store,
             allowed_chunk_ids=allowed_chunk_ids,
+            query_vec=query_vec,
         )
         return TeacherModelResult(answer=result.answer, proofs=result.proofs)

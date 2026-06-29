@@ -131,6 +131,53 @@ class RouteProficiencyTests(unittest.TestCase):
         self.assertGreaterEqual(transition.proficiency, 0.75)
 
 
+    def test_second_route_does_not_double_count_reviews(self) -> None:
+        # Regression: a topic reviewed under one route, then under a second route,
+        # must report total reviews = number of ratings (not 2*N+1). The new route
+        # used to inherit seen_count from the summed top-level column, so the
+        # projection counted the prior reviews twice the moment the route switched.
+        service = TopicProficiencyStateService()
+        current = None
+        # 3 reviews on the default (bloom) route.
+        for _ in range(3):
+            transition = service.apply_rating(
+                user_id="u1",
+                exam_id="e1",
+                topic_link=_link(),
+                rating="i_knew_it",
+                current=current,
+                card_route="default",
+                difficulty_framework="bloom",
+            )
+            current = StoredTopicProficiency(
+                user_id=transition.user_id,
+                exam_id=transition.exam_id,
+                topic_id=transition.topic_id,
+                proficiency=transition.proficiency,
+                current_difficulty=transition.current_difficulty,
+                streak_up=transition.streak_up,
+                streak_down=transition.streak_down,
+                seen_count=transition.seen_count,
+                correctish_count=transition.correctish_count,
+                last_updated_at="",
+                info=transition.info,
+            )
+        self.assertEqual(current.seen_count, 3)
+
+        # 4th review switches to the math_calculation route.
+        transition = service.apply_rating(
+            user_id="u1",
+            exam_id="e1",
+            topic_link=_link(),
+            rating="i_knew_it",
+            current=current,
+            card_route="math_calculation",
+            difficulty_framework="tag",
+        )
+        self.assertEqual(transition.seen_count, 4)  # not 7
+        self.assertEqual(transition.correctish_count, 4)
+
+
 if __name__ == "__main__":
     unittest.main()
 

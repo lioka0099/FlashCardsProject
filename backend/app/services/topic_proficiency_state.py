@@ -7,6 +7,7 @@ from typing import Dict, Optional
 from app.data.db_repository import StoredCardTopic, StoredTopicProficiency
 from app.services.difficulty_frameworks import clamp_difficulty, framework_for_route
 from app.services.topic_route_proficiency import (
+    ROUTE_PROFICIENCY_KEY,
     default_route_state,
     merge_route_state,
     normalize_route,
@@ -109,26 +110,28 @@ class TopicProficiencyStateService:
 
         route = normalize_route(card_route)
         framework = difficulty_framework or framework_for_route(route)
-        default_fallback = default_route_state(
-            card_route="default",
-            proficiency=base.proficiency,
-            current_difficulty=base.current_difficulty,
-            streak_up=base.streak_up,
-            streak_down=base.streak_down,
-            seen_count=base.seen_count,
-            correctish_count=base.correctish_count,
-        )
-        # When a route is seen for the first time (e.g. first math learning card
-        # right after diagnostic), bootstrap from the existing topic-level state
-        # so review counters keep accumulating instead of resetting to route-zero.
+        # A new route always inherits difficulty/proficiency/streak so a strong
+        # learner doesn't reset to level 1 when their card route switches.
+        #
+        # The review counters (seen_count/correctish_count) are different:
+        # project_route_columns SUMS them across routes. They may only be inherited
+        # from the top-level columns when no per-route history exists yet (the
+        # first review after diagnostic, where the diagnostic count lives only in
+        # the legacy columns). Once any route is recorded, the prior counts already
+        # live in the route map, so a *second* route must start its counters at 0 —
+        # otherwise seeding it from the topic total double-counts every prior review.
+        route_map = base.info.get(ROUTE_PROFICIENCY_KEY) if isinstance(base.info, dict) else None
+        has_route_history = isinstance(route_map, dict) and len(route_map) > 0
+        inherited_seen = 0 if has_route_history else base.seen_count
+        inherited_correctish = 0 if has_route_history else base.correctish_count
         route_fallback = default_route_state(
             card_route=route,
             proficiency=base.proficiency,
             current_difficulty=base.current_difficulty,
             streak_up=base.streak_up,
             streak_down=base.streak_down,
-            seen_count=base.seen_count,
-            correctish_count=base.correctish_count,
+            seen_count=inherited_seen,
+            correctish_count=inherited_correctish,
         )
         route_base = route_state_from_info(
             info=base.info,

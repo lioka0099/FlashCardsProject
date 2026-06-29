@@ -268,6 +268,63 @@ class ApiPlannerTests(unittest.TestCase):
         self.assertEqual(payload["cards"][0]["info"]["rating"], "i_knew_it")
         self.assertEqual(payload["cards"][1]["info"]["rating"], "learned_now")
 
+    def test_next_card_resumes_unrated_card_without_recording_ghost_presentations(self) -> None:
+        # First fetch serves the overdue card and records one presentation.
+        first = self.client.get(
+            f"/exams/{self.exam_id}/session/next-card",
+            params={"user_id": self.user_id},
+        )
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json()["card"]["card_id"], "c1")
+
+        # Re-fetching without rating (mount/reload) must resume the same card and NOT
+        # record additional presentations or advance the queue.
+        for _ in range(3):
+            again = self.client.get(
+                f"/exams/{self.exam_id}/session/next-card",
+                params={"user_id": self.user_id},
+            )
+            self.assertEqual(again.status_code, 200)
+            self.assertEqual(again.json()["card"]["card_id"], "c1")
+            self.assertEqual(again.json()["reason"], "resumed")
+
+        def orchestrator_presentations():
+            rows = self.repo.list_presentations(
+                user_id=self.user_id, exam_id=self.exam_id, ascending=True, limit=100
+            )
+            return [r for r in rows if (r.info or {}).get("source") == "session_orchestrator"]
+
+        self.assertEqual([r.card_id for r in orchestrator_presentations()], ["c1"])
+
+        # After rating, the next fetch advances to a new card and records it.
+        review = self.client.post(
+            f"/exams/{self.exam_id}/cards/c1/review",
+            data={"user_id": self.user_id, "rating": "almost_knew"},
+            headers={"Idempotency-Key": "resume-guard-review-c1"},
+        )
+        self.assertEqual(review.status_code, 200)
+
+        # Make c2 due so the advance has a deterministic candidate (mirrors the SRS flow).
+        now = datetime.now(timezone.utc)
+        self.repo.upsert_card_scheduling(
+            card_id="c2",
+            due_at=now - timedelta(minutes=1),
+            state="review",
+            interval_days=1.0,
+            ease=2.5,
+            reps=1,
+            lapses=0,
+            last_reviewed_at=now - timedelta(days=1),
+        )
+
+        advanced = self.client.get(
+            f"/exams/{self.exam_id}/session/next-card",
+            params={"user_id": self.user_id},
+        )
+        self.assertEqual(advanced.status_code, 200)
+        self.assertEqual(advanced.json()["card"]["card_id"], "c2")
+        self.assertEqual([r.card_id for r in orchestrator_presentations()], ["c1", "c2"])
+
     def test_active_learning_review_uses_unified_orchestration(self) -> None:
         res = self.client.post(
             f"/exams/{self.exam_id}/cards/c1/review",

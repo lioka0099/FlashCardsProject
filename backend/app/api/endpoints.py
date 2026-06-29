@@ -330,6 +330,26 @@ async def next_card_endpoint(
     if exam.user_id != user_id:
         return JSONResponse({"error": "Exam does not belong to user"}, status_code=403)
 
+    # Resume guard: if the last served card hasn't been rated yet, return it again
+    # instead of planning + recording a brand-new presentation. This makes the endpoint
+    # idempotent across page mounts/reloads (the frontend fetches it from a useQuery that
+    # refetches on every mount). Without it, each spurious fetch records a "presented" row
+    # and permanently advances the progression queue for a card the user never saw/rated,
+    # producing the "Not rated" ghost cards in history.
+    session_state = store.db.get_exam_session_state(user_id=user_id, exam_id=exam_id)
+    last_served_id = session_state.last_served_card_id if session_state else None
+    if last_served_id:
+        last_card = store.db.get_card(card_id=last_served_id)
+        if last_card is not None and last_card.status == "active":
+            reviewed = _latest_review_info_by_card(
+                user_id=user_id, exam_id=exam_id, card_ids=[last_served_id]
+            )
+            if last_served_id not in reviewed:
+                card = _card_to_response(store, last_served_id)
+                return NextCardResponse(
+                    card=card, reason="resumed", no_cards_available=False, message=None
+                )
+
     planner = SessionPlannerService(repo=store.db)
     generator = SessionCardGenerationService(repo=store.db)
     generator.archive_invalid_prefetched_cards(user_id=user_id, exam_id=exam_id)

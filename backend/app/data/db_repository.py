@@ -2083,6 +2083,29 @@ class DBRepository:
             )
             return [str(text or "") for (text,) in rows if str(text or "").strip()]
 
+    def list_math_fingerprints_for_exam(self, *, exam_id: str, limit: int = 200) -> List[str]:
+        """List recent structural fingerprints of math calculation cards for an exam.
+
+        Used to enforce structural diversity across batches so the same problem
+        *type* is not generated repeatedly with only different numbers.
+        """
+        with get_db() as db:
+            cards = (
+                db.query(Card.info)
+                .filter(Card.exam_id == exam_id)
+                .order_by(Card.created_at.desc())
+                .limit(max(1, int(limit)))
+                .all()
+            )
+        out: List[str] = []
+        for (info,) in cards:
+            if not isinstance(info, dict):
+                continue
+            fingerprint = str(info.get("math_fingerprint") or "").strip()
+            if fingerprint and fingerprint not in out:
+                out.append(fingerprint)
+        return out
+
     # =========================================================================
     # EVENT METHODS
     # =========================================================================

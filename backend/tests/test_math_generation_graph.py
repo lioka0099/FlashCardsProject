@@ -196,7 +196,7 @@ class MathGenerationGraphTests(unittest.TestCase):
                 "question_failure_reason": "insufficient evidence",
             }
         )  # type: ignore[arg-type]
-        self.assertEqual(conceptual["card_route"], "math_conceptual")
+        self.assertEqual(conceptual["card_route"], "default")
         self.assertEqual(conceptual["difficulty_framework"], "bloom")
         self.assertEqual(conceptual["route_metadata"]["math_kind"], "conceptual")
         self.assertEqual(conceptual["answer_attempts"], 0)
@@ -233,6 +233,59 @@ class MathGenerationGraphTests(unittest.TestCase):
         }
 
         self.assertEqual(graph_mod.decide_after_question_generation(state), "adapt_question")  # type: ignore[arg-type]
+
+    def test_math_uniqueness_rejects_structural_duplicate(self) -> None:
+        original_store = graph_mod.VectorStore
+
+        class FakeDB:
+            def has_equivalent_question_text(self, **_kwargs):
+                return False
+
+            def list_math_fingerprints_for_exam(self, **_kwargs):
+                return []
+
+        class FakeStore:
+            vector_backend = "memory"
+
+            def __init__(self, **_kwargs):
+                self.db = FakeDB()
+
+        seen = graph_mod.BatchSeenQuestion(
+            question_id="q1",
+            topic_id="t0",
+            question_text="Different wording entirely",
+            difficulty=2,
+            embedding=None,
+            created_seq=1,
+            fingerprint="arch=eigen|concepts=eigenvalues|kinds=matrix:eigenvals",
+        )
+        base_state = {
+            "card_route": "math_calculation",
+            "uniqueness_threshold": 0.97,
+            "store_basepath": "store",
+            "exam_id": "e1",
+            "topic_id": "t1",
+            "question": "Find the eigenvalues of B and classify it.",
+            "batch_seen_questions": (seen,),
+            "question_embedding": None,
+        }
+        try:
+            graph_mod.VectorStore = FakeStore  # type: ignore[assignment]
+            # Same structural fingerprint -> rejected even though text differs.
+            dup = graph_mod.node_check_uniqueness(
+                {**base_state, "math_question_payload": {"fingerprint": seen.fingerprint}}
+            )  # type: ignore[arg-type]
+            self.assertFalse(dup["is_unique"])
+            # Different fingerprint -> accepted.
+            uniq = graph_mod.node_check_uniqueness(
+                {
+                    **base_state,
+                    "math_question_payload": {"fingerprint": "arch=det|concepts=determinant|kinds=matrix:det"},
+                }
+            )  # type: ignore[arg-type]
+            self.assertTrue(uniq["is_unique"])
+        finally:
+            graph_mod.VectorStore = original_store  # type: ignore[assignment]
 
     def test_default_validation_failure_still_restarts_after_answer_attempts(self) -> None:
         state = {

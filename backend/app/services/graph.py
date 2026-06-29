@@ -32,8 +32,11 @@ from app.services.difficulty_frameworks import (
 )
 from app.services.math_student_model import MathStudentModelService
 from app.services.math_teacher_model import MathTeacherModelService
-from app.services.math_verification import verify_math_solution
-from app.services.math_solver import solve_math_problem
+from app.services.math_verification import verify_math_solution, verify_compound_solution
+from app.services.math_concept_inventory import (
+    INVENTORY_INFO_KEY,
+    MathConceptInventoryService,
+)
 from app.services.llm import (
     chat_completions_create,
     CHAT_MODEL,
@@ -80,6 +83,8 @@ class BatchSeenQuestion:
     difficulty: int
     embedding: np.ndarray
     created_seq: int
+    fingerprint: str = ""
+    archetype: str = ""
 
 # ------------- Helpers (kept from old implementation) -------------
 
@@ -285,6 +290,39 @@ class CardGenState(TypedDict):
 # ------------- Nodes -------------
 
 
+def _get_or_build_concept_inventory(state: CardGenState, store: VectorStore):
+    """Load the cached math concept inventory for a topic, building+caching if absent."""
+    topic_info: Dict[str, Any] = {}
+    topic_label = state["topic_label"]
+    try:
+        topics = store.db.list_topics(exam_id=state["exam_id"])
+        stored = next((t for t in topics if t.topic_id == state["topic_id"]), None)
+        topic_info = stored.info or {} if stored is not None else {}
+        topic_label = stored.label if stored is not None else topic_label
+    except Exception:
+        topic_info = {}
+    cached = topic_info.get(INVENTORY_INFO_KEY) if isinstance(topic_info, dict) else None
+    inventory = MathConceptInventoryService().get_or_build(
+        topic_label=topic_label,
+        context_pack=state["context_pack"],
+        cached=cached if isinstance(cached, dict) else None,
+    )
+    # Persist the inventory once so later cards on this topic reuse it.
+    if not (isinstance(cached, dict) and cached) and not inventory.is_empty():
+        try:
+            merged = dict(topic_info)
+            merged[INVENTORY_INFO_KEY] = inventory.to_info()
+            store.db.upsert_topic(
+                topic_id=state["topic_id"],
+                exam_id=state["exam_id"],
+                label=topic_label,
+                info=merged,
+            )
+        except Exception:
+            logger.debug("Could not persist concept inventory for topic %s", state.get("topic_id"))
+    return inventory
+
+
 def node_generate_question(state: CardGenState) -> CardGenState:
     """Generate a question at the specified difficulty level."""
     route = state.get("card_route") or "default"
@@ -307,6 +345,16 @@ def node_generate_question(state: CardGenState) -> CardGenState:
                     limit=100,
                 )
             )
+            # Structural-diversity signal: fingerprints already used this batch + in the exam.
+            blocked_fingerprints = [
+                str(seen.fingerprint or "").strip()
+                for seen in state.get("batch_seen_questions", ())
+                if str(seen.fingerprint or "").strip()
+            ]
+            blocked_fingerprints.extend(
+                store.db.list_math_fingerprints_for_exam(exam_id=state["exam_id"], limit=100)
+            )
+            inventory = _get_or_build_concept_inventory(state, store)
             result = MathStudentModelService().generate_question(
                 topic_label=state["topic_label"],
                 context_pack=state["context_pack"],
@@ -314,16 +362,25 @@ def node_generate_question(state: CardGenState) -> CardGenState:
                 memory=state.get("student_memory") or {},
                 route_metadata=state.get("route_metadata") or {},
                 avoid_questions=blocked_questions,
+                avoid_fingerprints=blocked_fingerprints,
+                concept_inventory=inventory,
                 attempt_no=int(state.get("question_attempts") or 0) + 1,
             )
             question = result.question
             math_payload = result.payload
-            solver_result = solve_math_problem(math_payload)
-            math_solver_payload = solver_result.to_info()
-            if solver_result.status != "solved":
-                raise ValueError(f"Math solver could not solve generated question: {solver_result.status}")
-            math_payload["verification_target"] = solver_result.verification_target
-            math_payload["expected_final_answer"] = solver_result.final_answer
+            # The compound spec was already verified deterministically inside the
+            # student model (every step solvable; final answer = CAS canonical).
+            math_solver_payload = {
+                "method": "sympy-compound",
+                "status": "solved",
+                "final_answer": math_payload.get("expected_final_answer"),
+                "solution_steps": [
+                    str(step.get("description") or "")
+                    for step in (math_payload.get("steps") or [])
+                    if str(step.get("description") or "").strip()
+                ],
+                "verification_target": math_payload.get("verification_target") or {},
+            }
         else:
             question = StudentModelService().generate_question(
                 topic_label=state["topic_label"],
@@ -351,11 +408,14 @@ def node_route_card(state: CardGenState) -> CardGenState:
     store = VectorStore(basepath=state["store_basepath"])
     override = state.get("card_route_override")
     if override in {"default", "math_calculation", "math_conceptual"}:
-        framework = framework_for_route(override)
+        # "math_conceptual" is an intent token only: it resolves to the default
+        # generation path, distinguished solely by the conceptual tag below.
+        resolved_route = "default" if override == "math_conceptual" else override
+        framework = framework_for_route(resolved_route)
         difficulty = clamp_difficulty(framework, state["difficulty"])
         level = get_level(framework, difficulty)
         route_metadata = {
-            "card_route": override,
+            "card_route": resolved_route,
             "subject_type": "math" if override.startswith("math_") else "general",
             "math_kind": "calculation" if override == "math_calculation" else "conceptual" if override == "math_conceptual" else "none",
             "confidence": 1.0,
@@ -363,7 +423,7 @@ def node_route_card(state: CardGenState) -> CardGenState:
         }
         return {
             **state,
-            "card_route": override,
+            "card_route": resolved_route,
             "route_metadata": route_metadata,
             "difficulty_framework": framework,
             "difficulty": difficulty,
@@ -474,14 +534,24 @@ def node_check_uniqueness(state: CardGenState) -> CardGenState:
     question_norm = " ".join(str(state.get("question") or "").strip().lower().split())
 
     if route == "math_calculation":
+        candidate_fp = str((state.get("math_question_payload") or {}).get("fingerprint") or "").strip()
+        # Structural-diversity gate: reject same problem *type* (archetype + concepts +
+        # operation family), not just identical text — this is what stops "same template,
+        # different numbers" repetition.
         for seen in state.get("batch_seen_questions", ()):
             seen_norm = " ".join(str(seen.question_text or "").strip().lower().split())
             if seen_norm and seen_norm == question_norm:
                 logger.warning(
-                    "Math uniqueness rejected exact in-batch duplicate: topic_id=%s seen_topic_id=%s question=%s",
+                    "Math uniqueness rejected exact in-batch duplicate: topic_id=%s seen_topic_id=%s",
                     state.get("topic_id"),
                     seen.topic_id,
-                    (state.get("question") or "")[:120],
+                )
+                return {**state, "is_unique": False}
+            if candidate_fp and str(seen.fingerprint or "").strip() == candidate_fp:
+                logger.info(
+                    "Math uniqueness rejected in-batch structural duplicate: topic_id=%s fingerprint=%s",
+                    state.get("topic_id"),
+                    candidate_fp,
                 )
                 return {**state, "is_unique": False}
         store = VectorStore(basepath=state["store_basepath"])
@@ -490,9 +560,17 @@ def node_check_uniqueness(state: CardGenState) -> CardGenState:
             question_text=state.get("question") or "",
         ):
             logger.warning(
-                "Math uniqueness rejected exact indexed duplicate: topic_id=%s question=%s",
+                "Math uniqueness rejected exact indexed duplicate: topic_id=%s",
                 state.get("topic_id"),
-                (state.get("question") or "")[:120],
+            )
+            return {**state, "is_unique": False}
+        if candidate_fp and candidate_fp in set(
+            store.db.list_math_fingerprints_for_exam(exam_id=state["exam_id"], limit=200)
+        ):
+            logger.info(
+                "Math uniqueness rejected indexed structural duplicate: topic_id=%s fingerprint=%s",
+                state.get("topic_id"),
+                candidate_fp,
             )
             return {**state, "is_unique": False}
         return {**state, "is_unique": True}
@@ -702,11 +780,20 @@ def node_verify_math(state: CardGenState) -> CardGenState:
     question_payload = dict(state.get("math_question_payload") or {})
     answer_payload = dict(state.get("math_answer_payload") or {})
     solver_payload = state.get("math_solver_payload") or {}
-    solver_target = solver_payload.get("verification_target") if isinstance(solver_payload, dict) else None
-    if isinstance(solver_target, dict) and solver_target:
-        question_payload["verification_target"] = solver_target
-        answer_payload["verification_target"] = solver_target
-    result = verify_math_solution(question_payload, answer_payload)
+    if question_payload.get("compound"):
+        # Compound path: confirm every step is solvable and the teacher's stated final
+        # answer matches the CAS-canonical answer of the designated final step.
+        declared = (
+            answer_payload.get("final_answer")
+            or question_payload.get("expected_final_answer")
+        )
+        result = verify_compound_solution(question_payload, declared_final_answer=declared)
+    else:
+        solver_target = solver_payload.get("verification_target") if isinstance(solver_payload, dict) else None
+        if isinstance(solver_target, dict) and solver_target:
+            question_payload["verification_target"] = solver_target
+            answer_payload["verification_target"] = solver_target
+        result = verify_math_solution(question_payload, answer_payload)
     threshold = float(state.get("validation_threshold", DEFAULT_CONFIG["math_validation_threshold"]))
     validation_ok = (state.get("validation_score") or 0.0) >= threshold
     math_ok = result.status == "verified"
@@ -811,13 +898,13 @@ def node_adapt_math_question_failure(state: CardGenState) -> CardGenState:
             "min_score": state.get("initial_min_score", DEFAULT_CONFIG["initial_min_score"]),
         }
 
-    framework = framework_for_route("math_conceptual")
+    framework = framework_for_route("default")
     difficulty = clamp_difficulty(framework, state.get("difficulty") or 1)
     level = get_level(framework, difficulty)
     route_metadata = dict(state.get("route_metadata") or {})
     route_metadata.update(
         {
-            "card_route": "math_conceptual",
+            "card_route": "default",
             "subject_type": "math",
             "math_kind": "conceptual",
             "reason": "Calculation generation repeatedly lacked solvable evidence; falling back to conceptual math.",
@@ -833,7 +920,7 @@ def node_adapt_math_question_failure(state: CardGenState) -> CardGenState:
     )
     return {
         **state,
-        "card_route": "math_conceptual",
+        "card_route": "default",
         "route_metadata": route_metadata,
         "difficulty_framework": framework,
         "difficulty": difficulty,
@@ -896,10 +983,13 @@ def node_store_card(state: CardGenState) -> CardGenState:
         info.update(
             {
                 "problem_type": math_question.get("problem_type"),
-                "expected_final_answer": math_answer.get("final_answer"),
+                "expected_final_answer": math_question.get("expected_final_answer") or math_answer.get("final_answer"),
                 "math_question": math_question,
                 "math_answer": math_answer,
                 "math_solver": state.get("math_solver_payload") or {},
+                "math_fingerprint": math_question.get("fingerprint"),
+                "math_archetype": math_question.get("archetype"),
+                "math_concepts": math_question.get("concepts_used") or [],
             }
         )
 
@@ -1546,6 +1636,7 @@ def generate_starter_cards_v2(
             emb = state.get("question_embedding")
             qid = state.get("question_id")
             if emb is not None and qid:
+                math_payload = state.get("math_question_payload") or {}
                 batch_seen_master.append(
                     BatchSeenQuestion(
                         question_id=qid,
@@ -1554,6 +1645,8 @@ def generate_starter_cards_v2(
                         difficulty=int(state["difficulty"]),
                         embedding=emb,
                         created_seq=next_created_seq,
+                        fingerprint=str(math_payload.get("fingerprint") or ""),
+                        archetype=str(math_payload.get("archetype") or ""),
                     )
                 )
                 next_created_seq += 1

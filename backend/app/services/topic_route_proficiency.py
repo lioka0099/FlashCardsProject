@@ -8,7 +8,6 @@ from app.services.difficulty_frameworks import clamp_difficulty, framework_for_r
 
 DEFAULT_ROUTE = "default"
 MATH_ROUTE = "math_calculation"
-MATH_CONCEPTUAL_ROUTE = "math_conceptual"
 ROUTE_PROFICIENCY_KEY = "route_proficiency"
 
 
@@ -29,8 +28,6 @@ class RouteProficiencyState:
 def normalize_route(card_route: Optional[str]) -> str:
     if card_route == MATH_ROUTE:
         return MATH_ROUTE
-    if card_route == MATH_CONCEPTUAL_ROUTE:
-        return MATH_CONCEPTUAL_ROUTE
     return DEFAULT_ROUTE
 
 

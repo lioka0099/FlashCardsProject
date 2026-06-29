@@ -47,6 +47,23 @@ _CALCULATION_TERMS = {
     "evaluate": "substitution",
     "equivalent": "equivalence",
     "system of equations": "system",
+    # Linear algebra
+    "determinant": "matrix",
+    "eigenvalue": "matrix",
+    "eigenvalues": "matrix",
+    "inverse": "matrix",
+    "matrix": "matrix",
+    # Discrete / sequences
+    "summation": "summation",
+    "series": "summation",
+    "limit": "limit",
+    # Probability / statistics / optimization (decompose into existing primitives)
+    "probability": "arithmetic",
+    "expectation": "arithmetic",
+    "variance": "arithmetic",
+    "maximize": "derivative",
+    "minimize": "derivative",
+    "optimize": "derivative",
 }
 
 _CONCEPTUAL_PATTERNS = [
@@ -60,14 +77,12 @@ _CONCEPTUAL_PATTERNS = [
     r"\bintuition\b",
 ]
 
+# Genuinely non-mathematical lab sciences. Note: statistics, probability, linear
+# algebra, discrete math, optimization, etc. are SUPPORTED math domains and must NOT
+# be blocked here. Document-level math profiling already gates non-math documents.
 _UNSUPPORTED_STEM_TERMS = {
     "physics",
     "chemistry",
-    "statistics",
-    "statistical",
-    "economics",
-    "algorithm",
-    "algorithms",
 }
 
 _MATH_VOCABULARY_TERMS = {
@@ -85,6 +100,27 @@ _MATH_VOCABULARY_TERMS = {
     "slope",
     "theorem",
     "variable",
+    # Linear algebra
+    "matrix",
+    "matrices",
+    "vector",
+    "eigenvalue",
+    "determinant",
+    # Probability / statistics
+    "probability",
+    "distribution",
+    "expectation",
+    "variance",
+    "random",
+    # Discrete / combinatorics
+    "combinatorics",
+    "permutation",
+    "summation",
+    "sequence",
+    # Geometry / optimization
+    "geometry",
+    "optimization",
+    "gradient",
 }
 
 
@@ -141,8 +177,10 @@ def _fallback(reason: str, *, subject_type: SubjectType = "general", confidence:
 
 
 def _conceptual_math(reason: str, *, confidence: float, evidence: MathClassificationEvidence) -> RouteDecision:
+    # Conceptual math uses the default generation path; the only thing that
+    # distinguishes it is the math_kind/subject_type tag (kept for logs/metadata).
     return RouteDecision(
-        card_route="math_conceptual",
+        card_route="default",
         subject_type="math",
         math_kind="conceptual",
         confidence=confidence,
@@ -199,6 +237,8 @@ def classify_card_route(
             cached_confidence = float(cached_topic_route.get("confidence") or 0.0)
         except Exception:
             cached_confidence = 0.0
+    # Legacy: older cached routes stored "math_conceptual" before it was folded
+    # into "default"; re-emit them as the conceptual-default decision.
     if (
         cached_route == "math_conceptual"
         and not mixed_requires_grounding
@@ -267,21 +307,6 @@ def classify_card_route(
         )
 
     return _fallback("No sufficient document-grounded calculation evidence was found.", subject_type=subject_type)
-
-
-def classify_topic_route(
-    *,
-    topic_label: str,
-    representative_context: str,
-    document_math_profile: Optional[Dict[str, Any]] = None,
-    store: Optional[VectorStore] = None,
-) -> RouteDecision:
-    return classify_card_route(
-        topic_label=topic_label,
-        context_pack=representative_context,
-        document_math_profile=document_math_profile,
-        store=store,
-    )
 
 
 def default_route_decision() -> RouteDecision:

@@ -28,6 +28,25 @@ def _safe_json_load(raw: str) -> Dict[str, Any]:
         return {"answer": raw}
 
 
+def _format_step_plan(question_payload: Dict[str, Any]) -> str:
+    """Render the verified compound step plan as readable guidance for the teacher."""
+    steps = question_payload.get("steps") if isinstance(question_payload, dict) else None
+    if not isinstance(steps, list) or not steps:
+        return "(single-step problem; use the solver result)"
+    lines: List[str] = []
+    for index, step in enumerate(steps, 1):
+        if not isinstance(step, dict):
+            continue
+        description = str(step.get("description") or "").strip()
+        check = step.get("check") if isinstance(step.get("check"), dict) else None
+        target = (check.get("verification_target") if isinstance(check, dict) else None) or check or {}
+        kind = str(target.get("kind") or "").strip()
+        tag = f" [{kind}]" if kind else ""
+        marker = " (final)" if step.get("is_final") else ""
+        lines.append(f"{index}. {description}{tag}{marker}")
+    return "\n".join(lines) if lines else "(single-step problem; use the solver result)"
+
+
 @dataclass
 class MathTeacherModelService:
     """Grounded teacher-side worked-solution generation for math calculation cards."""
@@ -66,23 +85,30 @@ class MathTeacherModelService:
         context = _build_context(prompt_proofs, max_chars=12000)
 
         solver = solver_payload or {}
+        # Compound problems carry a verified step plan; lay the worked solution out
+        # along it so the explanation matches the CAS-checked computation.
+        step_plan = _format_step_plan(question_payload)
+        canonical_final = str(
+            question_payload.get("expected_final_answer") or solver.get("final_answer") or ""
+        ).strip()
         sys_prompt = (
             "You write worked solutions for math calculation flashcards.\n"
             "Use ONLY the provided sources for the rule, formula, values, and procedure.\n"
-            "Use the deterministic solver result as authoritative for the computation.\n"
+            "Follow the verified step plan; the deterministic results are authoritative.\n"
             "Return JSON only."
         )
         user_prompt = (
             f"QUESTION:\n{question}\n\n"
+            f"VERIFIED STEP PLAN:\n{step_plan}\n\n"
+            f"CANONICAL FINAL ANSWER (authoritative):\n{canonical_final or '(use solver result)'}\n\n"
             f"QUESTION STRUCTURE:\n{json.dumps(question_payload, ensure_ascii=True)}\n\n"
             f"DETERMINISTIC SOLVER RESULT:\n{json.dumps(solver, ensure_ascii=True)}\n\n"
             f"SOURCES:\n{context}\n\n"
             "Write a concise worked solution.\n"
             "Rules:\n"
             "- Use only the provided sources and the givens in the question.\n"
-            "- Include step-by-step work.\n"
-            "- Use the solver's solution_steps and final_answer for the computation.\n"
-            "- Include a clear final answer matching the solver final_answer exactly.\n"
+            "- Follow the verified step plan in order; explain each step clearly.\n"
+            "- The final answer MUST equal the canonical final answer exactly.\n"
             "- Keep the solution flashcard-friendly, not a long lecture.\n"
             "- Use SymPy-compatible syntax for final_answer and verification_target fields where possible.\n\n"
             "Return JSON with this schema:\n"
@@ -123,7 +149,10 @@ class MathTeacherModelService:
         final_proofs, _ = _condense_proofs(question, answer, proofs, artifacts=proof_artifacts)
         display_proofs = _select_display_proofs(question, answer, final_proofs)
         payload["answer"] = answer
-        if solver.get("final_answer"):
+        # The displayed final answer is forced to the CAS-canonical result.
+        if canonical_final:
+            payload["final_answer"] = canonical_final
+        elif solver.get("final_answer"):
             payload["final_answer"] = str(solver["final_answer"])
         payload.setdefault(
             "solution_steps",

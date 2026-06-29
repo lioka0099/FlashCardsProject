@@ -191,6 +191,16 @@ def _solve_integral(target: Dict[str, Any]) -> MathSolverResult:
     if not expression:
         return _unsupported("integral target missing expression", target)
     symbol = sp.Symbol(variable)
+    lower = target.get("lower")
+    upper = target.get("upper")
+    if lower is not None and upper is not None:
+        result = sp.integrate(_parse_expr(expression), (symbol, _parse_expr(lower), _parse_expr(upper)))
+        final = _format_expr(result)
+        steps = [
+            f"Integrate {expression} with respect to {variable} from {lower} to {upper}.",
+            f"The definite integral evaluates to {final}.",
+        ]
+        return _solved(final, steps, {**target, "kind": "integral"})
     result = sp.integrate(_parse_expr(expression), symbol)
     final = f"{_format_expr(result)} + C"
     return _solved(
@@ -198,6 +208,90 @@ def _solve_integral(target: Dict[str, Any]) -> MathSolverResult:
         [f"Integrate {expression} with respect to {variable}.", f"An antiderivative is {final}."],
         {**target, "kind": "integral"},
     )
+
+
+def _parse_matrix(value: Any) -> sp.Matrix:
+    if isinstance(value, sp.MatrixBase):
+        return value
+    if isinstance(value, (list, tuple)):
+        rows = []
+        for row in value:
+            if isinstance(row, (list, tuple)):
+                rows.append([_parse_expr(cell) for cell in row])
+            else:
+                rows.append([_parse_expr(row)])
+        return sp.Matrix(rows)
+    return sp.Matrix(sp.sympify(_normalize_expr_text(value)))
+
+
+def _solve_matrix(target: Dict[str, Any]) -> MathSolverResult:
+    operation = str(target.get("operation") or "").strip().lower()
+    matrix = target.get("matrix")
+    if matrix is None:
+        return _unsupported("matrix target missing matrix", target)
+    A = _parse_matrix(matrix)
+    if operation in {"determinant", "det"}:
+        result = sp.simplify(A.det())
+        final = _format_expr(result)
+        steps = [f"Compute the determinant of the matrix.", f"det = {final}."]
+        return _solved(final, steps, {**target, "kind": "matrix", "operation": "det"})
+    if operation in {"inverse", "inv"}:
+        result = sp.simplify(A.inv())
+        final = str(result)
+        return _solved(final, ["Invert the matrix.", f"The inverse is {final}."], {**target, "kind": "matrix", "operation": "inverse"})
+    if operation in {"transpose", "t"}:
+        result = A.T
+        final = str(result)
+        return _solved(final, ["Transpose the matrix.", f"The transpose is {final}."], {**target, "kind": "matrix", "operation": "transpose"})
+    if operation == "rank":
+        result = A.rank()
+        final = str(result)
+        return _solved(final, ["Compute the rank of the matrix.", f"The rank is {final}."], {**target, "kind": "matrix", "operation": "rank"})
+    if operation in {"eigenvals", "eigenvalues", "eig"}:
+        eig = A.eigenvals()
+        values: List[str] = []
+        for value, multiplicity in eig.items():
+            values.extend([_format_expr(value)] * int(multiplicity))
+        values = sorted(values)
+        final = ", ".join(values)
+        return _solved(final, ["Find the eigenvalues from det(A - lambda*I) = 0.", f"The eigenvalues are {final}."], {**target, "kind": "matrix", "operation": "eigenvals", "expected": values})
+    if operation in {"multiply", "product", "matmul"}:
+        matrix_b = target.get("matrix_b")
+        if matrix_b is None:
+            return _unsupported("matrix multiply target missing matrix_b", target)
+        result = sp.simplify(A * _parse_matrix(matrix_b))
+        final = str(result)
+        return _solved(final, ["Multiply the matrices.", f"The product is {final}."], {**target, "kind": "matrix", "operation": "multiply"})
+    return _unsupported(f"unsupported matrix operation: {operation or '(missing)'}", target)
+
+
+def _solve_limit(target: Dict[str, Any]) -> MathSolverResult:
+    expression = target.get("expression")
+    variable = str(target.get("variable") or "x")
+    point = target.get("point")
+    if not expression or point is None:
+        return _unsupported("limit target missing expression or point", target)
+    symbol = sp.Symbol(variable)
+    direction = str(target.get("direction") or "+").strip()
+    dir_arg = "-" if direction == "-" else "+"
+    result = sp.limit(_parse_expr(expression), symbol, _parse_expr(point), dir_arg)
+    final = _format_expr(result)
+    steps = [f"Evaluate the limit of {expression} as {variable} -> {point}.", f"The limit is {final}."]
+    return _solved(final, steps, {**target, "kind": "limit"})
+
+
+def _solve_summation(target: Dict[str, Any]) -> MathSolverResult:
+    expression = target.get("expression")
+    variable = str(target.get("variable") or "k")
+    lower = target.get("lower")
+    upper = target.get("upper")
+    if not expression or lower is None or upper is None:
+        return _unsupported("summation target missing expression, lower, or upper", target)
+    symbol = sp.Symbol(variable)
+    result = sp.simplify(sp.summation(_parse_expr(expression), (symbol, _parse_expr(lower), _parse_expr(upper))))
+    final = _format_expr(result)
+    steps = [f"Sum {expression} for {variable} from {lower} to {upper}.", f"The sum is {final}."]
+    return _solved(final, steps, {**target, "kind": "summation"})
 
 
 def solve_math_problem(question_payload: Optional[Dict[str, Any]]) -> MathSolverResult:
@@ -235,6 +329,12 @@ def solve_math_problem(question_payload: Optional[Dict[str, Any]]) -> MathSolver
             return _solve_derivative(target)
         if kind in {"integral", "integrate"}:
             return _solve_integral(target)
+        if kind in {"matrix", "matrices"}:
+            return _solve_matrix(target)
+        if kind in {"limit"}:
+            return _solve_limit(target)
+        if kind in {"summation", "sum", "series"}:
+            return _solve_summation(target)
         if target.get("expected") is not None:
             return _solved(str(target["expected"]), ["Use the provided expected result."], {**target, "kind": kind or "equivalence"})
         return _unsupported(f"unsupported solver kind: {kind or '(missing)'}", payload)

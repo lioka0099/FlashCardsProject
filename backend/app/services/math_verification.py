@@ -186,6 +186,129 @@ def _verify_system(target: Dict[str, Any], final_answer: Any) -> VerificationRes
     )
 
 
+def _parse_matrix(value: Any) -> sp.Matrix:
+    if isinstance(value, sp.MatrixBase):
+        return value
+    if isinstance(value, (list, tuple)):
+        rows = []
+        for row in value:
+            if isinstance(row, (list, tuple)):
+                rows.append([_parse_expr(cell) for cell in row])
+            else:
+                rows.append([_parse_expr(row)])
+        return sp.Matrix(rows)
+    return sp.Matrix(sp.sympify(_normalize_expr_text(value)))
+
+
+def _matrices_equal(actual: Any, expected: Any) -> bool:
+    try:
+        A = _parse_matrix(actual)
+        B = _parse_matrix(expected)
+        if A.shape != B.shape:
+            return False
+        return sp.simplify(A - B).is_zero_matrix is True
+    except Exception:
+        return False
+
+
+def _value_list(value: Any) -> List[Any]:
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    text = str(value).strip().strip("[]")
+    return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def _multiset_equivalent(actual: Any, expected: Any) -> bool:
+    actual_items = _value_list(actual)
+    expected_items = _value_list(expected)
+    if len(actual_items) != len(expected_items):
+        return False
+    remaining = list(expected_items)
+    for item in actual_items:
+        match_index = None
+        for idx, candidate in enumerate(remaining):
+            try:
+                if _equivalent(item, candidate):
+                    match_index = idx
+                    break
+            except Exception:
+                continue
+        if match_index is None:
+            return False
+        remaining.pop(match_index)
+    return not remaining
+
+
+def _verify_matrix(target: Dict[str, Any], final_answer: Any) -> VerificationResult:
+    operation = str(target.get("operation") or "").strip().lower()
+    matrix = target.get("matrix")
+    if matrix is None:
+        return _unsupported("matrix target missing matrix", target)
+    A = _parse_matrix(matrix)
+    expected = target.get("expected")
+    if operation in {"determinant", "det"}:
+        computed = expected if expected is not None else sp.simplify(A.det())
+        ok = _equivalent(final_answer, computed)
+    elif operation == "rank":
+        computed = expected if expected is not None else A.rank()
+        ok = _equivalent(final_answer, computed)
+    elif operation in {"eigenvals", "eigenvalues", "eig"}:
+        if expected is None:
+            eig = A.eigenvals()
+            computed = []
+            for value, multiplicity in eig.items():
+                computed.extend([value] * int(multiplicity))
+        else:
+            computed = expected
+        ok = _multiset_equivalent(final_answer, computed)
+    elif operation in {"inverse", "inv"}:
+        computed = expected if expected is not None else sp.simplify(A.inv())
+        ok = _matrices_equal(final_answer, computed)
+    elif operation in {"transpose", "t"}:
+        computed = expected if expected is not None else A.T
+        ok = _matrices_equal(final_answer, computed)
+    elif operation in {"multiply", "product", "matmul"}:
+        matrix_b = target.get("matrix_b")
+        if matrix_b is None:
+            return _unsupported("matrix multiply target missing matrix_b", target)
+        computed = expected if expected is not None else sp.simplify(A * _parse_matrix(matrix_b))
+        ok = _matrices_equal(final_answer, computed)
+    else:
+        return _unsupported(f"unsupported matrix operation: {operation or '(missing)'}", target)
+    return _checked(ok, {"kind": "matrix", "operation": operation, "expected": str(computed), "actual": str(final_answer)})
+
+
+def _verify_limit(target: Dict[str, Any], final_answer: Any) -> VerificationResult:
+    expression = target.get("expression")
+    variable = str(target.get("variable") or "x")
+    point = target.get("point")
+    if not expression or point is None:
+        return _unsupported("limit target missing expression or point", target)
+    if target.get("expected") is not None:
+        expected = target["expected"]
+    else:
+        direction = str(target.get("direction") or "+").strip()
+        dir_arg = "-" if direction == "-" else "+"
+        expected = sp.limit(_parse_expr(expression), sp.Symbol(variable), _parse_expr(point), dir_arg)
+    ok = _equivalent(final_answer, expected)
+    return _checked(ok, {"kind": "limit", "expression": str(expression), "expected": str(expected), "actual": str(final_answer)})
+
+
+def _verify_summation(target: Dict[str, Any], final_answer: Any) -> VerificationResult:
+    expression = target.get("expression")
+    variable = str(target.get("variable") or "k")
+    lower = target.get("lower")
+    upper = target.get("upper")
+    if not expression or lower is None or upper is None:
+        return _unsupported("summation target missing expression, lower, or upper", target)
+    if target.get("expected") is not None:
+        expected = target["expected"]
+    else:
+        expected = sp.summation(_parse_expr(expression), (sp.Symbol(variable), _parse_expr(lower), _parse_expr(upper)))
+    ok = _equivalent(final_answer, expected)
+    return _checked(ok, {"kind": "summation", "expression": str(expression), "expected": str(expected), "actual": str(final_answer)})
+
+
 def _split_equation(equation: str) -> tuple[str, str]:
     if "=" not in equation:
         raise ValueError("Equation must contain '='")
@@ -240,6 +363,91 @@ def _checked(ok: bool, details: Dict[str, Any]) -> VerificationResult:
     )
 
 
+def verify_compound_solution(
+    spec: Optional[Dict[str, Any]],
+    *,
+    declared_final_answer: Any = None,
+) -> VerificationResult:
+    """
+    Deterministically verify a compound (multi-step) calculation spec.
+
+    Guarantees: every machine-checkable step is solvable by SymPy (the
+    solver-of-record), and the declared final answer is CAS-equivalent to the
+    result computed for the designated final step. Narrative steps (no ``check``)
+    carry no guarantee and are ignored here. Returns ``verified`` only when the
+    computational spine and the final answer all check out.
+    """
+    from app.services.math_solver import solve_math_problem  # local import avoids cycle
+
+    spec = spec or {}
+    steps = spec.get("steps") if isinstance(spec.get("steps"), list) else []
+    checkable = [s for s in steps if isinstance(s, dict) and isinstance(s.get("check"), dict)]
+    if not checkable:
+        return _unsupported("compound spec has no machine-checkable step", spec)
+
+    step_results: List[Dict[str, Any]] = []
+    final_canonical: Any = None
+    final_target: Dict[str, Any] = {}
+    for index, step in enumerate(steps):
+        check = step.get("check") if isinstance(step, dict) else None
+        if not isinstance(check, dict):
+            continue
+        solver = solve_math_problem(check)
+        ok = solver.status == "solved"
+        step_results.append(
+            {
+                "index": index,
+                "kind": str((check.get("verification_target") or check).get("kind") or ""),
+                "status": solver.status,
+                "final_answer": solver.final_answer,
+            }
+        )
+        if not ok:
+            return VerificationResult(
+                status="failed",
+                confidence=0.0,
+                checked_final_answer=False,
+                checked_steps=True,
+                details={"reason": f"step {index} is not solvable", "steps": step_results, "solver": solver.details},
+            )
+        if step.get("is_final"):
+            final_canonical = solver.final_answer
+            final_target = solver.verification_target or (check.get("verification_target") or check)
+
+    if final_canonical is None:  # no step flagged final: use the last checkable result
+        last = step_results[-1]
+        final_canonical = last["final_answer"]
+        last_check = checkable[-1]["check"]
+        final_target = last_check.get("verification_target") or last_check
+
+    declared = declared_final_answer if declared_final_answer is not None else spec.get("final_answer")
+    final_checked = False
+    final_ok = True
+    if declared is not None and str(declared).strip():
+        sub = verify_math_solution(
+            {"verification_target": final_target},
+            {"final_answer": declared, "verification_target": final_target},
+        )
+        final_ok = sub.status == "verified"
+        final_checked = sub.status in {"verified", "failed"}
+
+    status = "verified" if final_ok else "failed"
+    return VerificationResult(
+        status=status,
+        method="sympy",
+        confidence=1.0 if status == "verified" else 0.0,
+        checked_final_answer=final_checked,
+        checked_steps=True,
+        details={
+            "steps": step_results,
+            "checked_steps": len(step_results),
+            "canonical_final_answer": str(final_canonical),
+            "declared_final_answer": (str(declared) if declared is not None else None),
+            "final_match": final_ok,
+        },
+    )
+
+
 def verify_math_solution(
     question_payload: Optional[Dict[str, Any]],
     answer_payload: Optional[Dict[str, Any]],
@@ -278,6 +486,12 @@ def verify_math_solution(
             return _verify_derivative(target, final_answer)
         if kind in {"integral", "integrate"}:
             return _verify_integral(target, final_answer)
+        if kind in {"matrix", "matrices"}:
+            return _verify_matrix(target, final_answer)
+        if kind in {"limit"}:
+            return _verify_limit(target, final_answer)
+        if kind in {"summation", "sum", "series"}:
+            return _verify_summation(target, final_answer)
         if target.get("expected") is not None:
             return _verify_equivalence(target, final_answer)
         return _unsupported(f"unsupported verification kind: {kind or '(missing)'}", target)

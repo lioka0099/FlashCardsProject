@@ -21,7 +21,7 @@ class MathRoutingTests(unittest.TestCase):
             topic_label="Derivative Meaning",
             context_pack="Explain what a derivative represents and why slope is useful for rates of change.",
         )
-        self.assertEqual(decision.card_route, "math_conceptual")
+        self.assertEqual(decision.card_route, "default")
         self.assertEqual(decision.math_kind, "conceptual")
 
     def test_numeric_mentions_without_calculation_fall_back(self) -> None:
@@ -91,7 +91,8 @@ class MathRoutingTests(unittest.TestCase):
             context_pack="Explain what a derivative represents and why slope is useful for rates of change.",
             document_math_profile={"kind": "math", "confidence": 0.9},
         )
-        self.assertEqual(decision.card_route, "math_conceptual")
+        self.assertEqual(decision.card_route, "default")
+        self.assertEqual(decision.math_kind, "conceptual")
 
     def test_difficulty_registry_keeps_frameworks_separate(self) -> None:
         self.assertEqual(framework_for_route("default"), "bloom")
@@ -126,7 +127,25 @@ class MathRoutingTests(unittest.TestCase):
             )
         finally:
             card_routing.MathClassificationService = original  # type: ignore[assignment]
-        self.assertEqual(decision.card_route, "math_conceptual")
+        self.assertEqual(decision.card_route, "default")
+        self.assertEqual(decision.math_kind, "conceptual")
+
+    def test_routes_linear_algebra_calculation_to_math(self) -> None:
+        decision = classify_card_route(
+            topic_label="Determinants",
+            context_pack="The determinant of a 2x2 matrix [[a,b],[c,d]] = a*d - b*c. Compute the determinant of the matrix.",
+        )
+        self.assertEqual(decision.card_route, "math_calculation")
+        self.assertIn("matrix", decision.problem_types)
+
+    def test_statistics_context_is_not_hard_blocked(self) -> None:
+        # Statistics/probability are supported math domains; they must not be
+        # routed to default purely because the word "statistics" appears.
+        decision = classify_card_route(
+            topic_label="Variance",
+            context_pack="The variance is Var(X) = E[X^2] - (E[X])^2. Compute the variance from the distribution.",
+        )
+        self.assertNotEqual(decision.card_route, "default")
 
     def test_cached_conceptual_route_is_preserved(self) -> None:
         decision = classify_card_route(
@@ -134,7 +153,8 @@ class MathRoutingTests(unittest.TestCase):
             context_pack="Inputs and outputs are related by a function.",
             cached_topic_route={"card_route": "math_conceptual", "confidence": 0.8},
         )
-        self.assertEqual(decision.card_route, "math_conceptual")
+        self.assertEqual(decision.card_route, "default")
+        self.assertEqual(decision.math_kind, "conceptual")
 
 
 if __name__ == "__main__":

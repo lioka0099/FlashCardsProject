@@ -11,18 +11,21 @@ from app.services.llm import embed_texts
 
 
 _CALCULATION_EXEMPLARS = [
-    "solve an equation for x using algebraic operations",
-    "differentiate a function using derivative rules",
-    "integrate an expression using an integral rule",
+    "solve an equation or system of equations for unknown variables",
+    "differentiate or integrate a function using calculus rules",
     "simplify factor expand or compute an algebraic expression",
-    "solve a system of equations for unknown variables",
+    "compute a determinant inverse rank or eigenvalues of a matrix",
+    "calculate a probability expectation variance or value from a distribution",
+    "evaluate a summation series or limit",
+    "find a maximum or minimum by optimization",
+    "compute lengths areas angles or coordinates in geometry",
 ]
 
 _CONCEPTUAL_EXEMPLARS = [
-    "explain what a derivative represents as rate of change or slope",
-    "describe the meaning of a function variable equation or expression",
-    "understand a mathematical definition theorem property or relationship",
-    "interpret the concept behind a formula without calculating values",
+    "explain what a concept such as a derivative eigenvalue or distribution represents",
+    "describe the meaning of a mathematical object relationship or property",
+    "understand a mathematical definition theorem axiom or property",
+    "interpret the idea behind a formula or method without calculating values",
 ]
 
 _PROCESS_CACHE: Dict[str, np.ndarray] = {}

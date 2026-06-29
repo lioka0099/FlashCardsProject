@@ -15,7 +15,7 @@ from app.services.exams import load_exam
 from app.services.llm import CHAT_MODEL_FAST, chat_completions_create
 from app.utils.vectors import l2_normalize
 from app.services.context_packs import build_representative_chunk_pack
-from app.services.card_routing import classify_topic_route
+from app.services.card_routing import classify_card_route
 
 try:
     import hdbscan  # type: ignore
@@ -835,9 +835,10 @@ def build_topics_for_exam(
                 id_to_row=id_to_row,
                 chunk_by_id=chunk_by_id,
             )
-            route_decision = classify_topic_route(
+            # Topic-build time: route from a representative chunk pack for the topic.
+            route_decision = classify_card_route(
                 topic_label=label,
-                representative_context=route_context or "\n".join(texts[:4]),
+                context_pack=route_context or "\n".join(texts[:4]),
                 document_math_profile=document_math_profile if isinstance(document_math_profile, dict) else None,
                 store=store,
             )

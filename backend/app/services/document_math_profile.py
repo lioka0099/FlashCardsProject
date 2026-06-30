@@ -18,7 +18,6 @@ _LABEL_TO_KIND: Dict[str, DocumentMathKind] = {
     "CONCEPTUAL": "non_math",
     "REAL": "non_math",
     "NON_MATH": "non_math",
-    "NON-MATH": "non_math",
     "BOTH": "mixed",
     "MIXED": "mixed",
 }

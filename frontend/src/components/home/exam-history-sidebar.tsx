@@ -2,35 +2,52 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
+import { Layers, Plus, Search } from "lucide-react";
 import { InlineError } from "@/components/common/inline-error";
-import { listRecentExams } from "@/lib/api/client";
+import { listRecentExams, type ExamListItem } from "@/lib/api/client";
 import { mapHomeApiError } from "@/lib/api/ui-error";
 import { useGuestSession } from "@/lib/session/guest-session";
 
 type ExamHistorySidebarProps = {
   className?: string;
   onNavigate?: () => void;
+  onNewTest?: () => void;
 };
 
-function formatTimestamp(value: string) {
+const ICON_TINTS = ["#6f42c1", "#2db7c5", "#f59e0b", "#ef4444", "#3b82f6"];
+
+function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "Updated recently";
+    return "Recently";
   }
-
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date);
 }
 
-export function ExamHistorySidebar({ className, onNavigate }: ExamHistorySidebarProps) {
+function fileType(info: Record<string, unknown>) {
+  const filenames = info.filenames;
+  const first = Array.isArray(filenames) ? filenames[0] : undefined;
+  if (typeof first === "string" && first.includes(".")) {
+    return first.split(".").pop()?.toUpperCase() ?? "DOC";
+  }
+  return "DOC";
+}
+
+function progressPct(info: Record<string, unknown>) {
+  const total = Number(info.diagnostic_total ?? 0);
+  const answered = Number(info.diagnostic_answered ?? 0);
+  if (!total || total <= 0) {
+    return 0;
+  }
+  return Math.min(100, Math.round((answered / total) * 100));
+}
+
+export function ExamHistorySidebar({ className, onNavigate, onNewTest }: ExamHistorySidebarProps) {
   const router = useRouter();
-  const accountRef = useRef<HTMLDivElement | null>(null);
-  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const { userId } = useGuestSession();
 
   const {
@@ -46,23 +63,16 @@ export function ExamHistorySidebar({ className, onNavigate }: ExamHistorySidebar
     refetchOnWindowFocus: false,
   });
 
-  useEffect(() => {
-    function onDocumentPointerDown(event: MouseEvent) {
-      if (accountRef.current?.contains(event.target as Node)) {
-        return;
-      }
-      setIsAccountMenuOpen(false);
-    }
-
-    if (isAccountMenuOpen) {
-      document.addEventListener("mousedown", onDocumentPointerDown);
-      return () => {
-        document.removeEventListener("mousedown", onDocumentPointerDown);
-      };
-    }
-  }, [isAccountMenuOpen]);
-
   const recentExams = useMemo(() => exams ?? [], [exams]);
+  const filteredExams = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) {
+      return recentExams;
+    }
+    return recentExams.filter((exam) =>
+      (exam.title || "").toLowerCase().includes(term),
+    );
+  }, [recentExams, query]);
   const recentExamsError = isError
     ? mapHomeApiError(error, "home.sidebar.list_recent_exams")
     : null;
@@ -72,86 +82,102 @@ export function ExamHistorySidebar({ className, onNavigate }: ExamHistorySidebar
     router.push(`/exams/${examId}`);
   }
 
+  function cardLabel(exam: ExamListItem) {
+    return exam.title || "Untitled study quest";
+  }
+
   return (
-    <motion.aside
+    <aside
       id="home-sidebar"
       className={className}
-      aria-label="Exam history sidebar"
-      initial={{ opacity: 0, x: -16 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.35, ease: "easeOut" }}
+      aria-label="Test history sidebar"
     >
-      <section className="home-sidebar__history">
-        <h2 className="home-sidebar__section-label">Recent decks</h2>
+      <Link className="dash-brand" href="/" aria-label="Flashcards home">
+        <span className="dash-brand__mark" aria-hidden="true">
+          <Layers size={22} />
+        </span>
+        <span>
+          <span className="dash-brand__name">Flashcards</span>
+          <span className="dash-brand__tag">AI-Powered Learning</span>
+        </span>
+      </Link>
 
-        {isLoading ? <p className="home-sidebar__hint">Finding your latest brain snacks...</p> : null}
-
-        {isError ? (
-          <InlineError
-            message={recentExamsError?.message ?? "Something went wrong while loading your exams. Please try again."}
-            onRetry={recentExamsError?.canRetry ? () => void refetch() : undefined}
-          />
-        ) : null}
-
-        {!isLoading && !isError && recentExams.length === 0 ? (
-          <p className="home-sidebar__hint">No decks yet. Your comeback arc starts with one upload.</p>
-        ) : null}
-
-        {!isLoading && !isError && recentExams.length > 0 ? (
-          <ul
-            className="home-sidebar__recent-list"
-            style={{ maxHeight: "none", overflow: "visible" }}
-          >
-            {recentExams.map((exam) => (
-              <li key={exam.exam_id}>
-                <motion.button
-                  className="home-sidebar__recent-item"
-                  type="button"
-                  onClick={() => handleExamSelect(exam.exam_id)}
-                  whileHover={{ x: 4 }}
-                  whileTap={{ scale: 0.99 }}
-                >
-                  <span className="home-sidebar__recent-title">{exam.title || "Untitled study quest"}</span>
-                  <span className="home-sidebar__recent-meta">{formatTimestamp(exam.updated_at)}</span>
-                </motion.button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
-
-      <div ref={accountRef} className="home-sidebar__account-wrap">
-        <AnimatePresence>
-          {isAccountMenuOpen ? (
-          <motion.div
-            className="home-sidebar__account-menu"
-            role="menu"
-            aria-label="Account options"
-            initial={{ opacity: 0, y: 8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-          >
-            <Link className="home-sidebar__account-link" href="/profile" role="menuitem" onClick={onNavigate}>
-              Profile nook
-            </Link>
-            <Link className="home-sidebar__account-link" href="/settings" role="menuitem" onClick={onNavigate}>
-              Settings studio
-            </Link>
-          </motion.div>
-          ) : null}
-        </AnimatePresence>
-
-        <button
-          className="home-sidebar__account-button"
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded={isAccountMenuOpen}
-          onClick={() => setIsAccountMenuOpen((prev) => !prev)}
-        >
-          <span>Account</span>
+      <div className="dash-side__head">
+        <h2 className="dash-side__title">My Tests</h2>
+        <button className="dash-newtest" type="button" onClick={onNewTest}>
+          <Plus size={16} />
+          New Test
         </button>
       </div>
-    </motion.aside>
+
+      <div className="dash-search">
+        <Search className="dash-search__icon" size={16} aria-hidden="true" />
+        <input
+          className="dash-search__input"
+          type="search"
+          placeholder="Search tests..."
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label="Search tests"
+        />
+      </div>
+
+      {isLoading ? <p className="dash-side__msg">Finding your latest brain snacks...</p> : null}
+
+      {isError ? (
+        <InlineError
+          message={recentExamsError?.message ?? "Something went wrong while loading your exams. Please try again."}
+          onRetry={recentExamsError?.canRetry ? () => void refetch() : undefined}
+        />
+      ) : null}
+
+      {!isLoading && !isError && recentExams.length === 0 ? (
+        <p className="dash-side__msg">No decks yet. Your comeback arc starts with one upload.</p>
+      ) : null}
+
+      {!isLoading && !isError && recentExams.length > 0 && filteredExams.length === 0 ? (
+        <p className="dash-side__msg">No tests match &ldquo;{query}&rdquo;.</p>
+      ) : null}
+
+      {!isLoading && !isError && filteredExams.length > 0 ? (
+        <ul className="dash-list" aria-label="Recent tests">
+          {filteredExams.map((exam, index) => {
+            const pct = progressPct(exam.info);
+            return (
+              <li key={exam.exam_id}>
+                <motion.button
+                  className="dash-card"
+                  type="button"
+                  onClick={() => handleExamSelect(exam.exam_id)}
+                  whileHover={{ x: 2 }}
+                  whileTap={{ scale: 0.99 }}
+                  aria-label={cardLabel(exam)}
+                >
+                  <span
+                    className="dash-card__icon"
+                    style={{ background: ICON_TINTS[index % ICON_TINTS.length] }}
+                    aria-hidden="true"
+                  >
+                    {fileType(exam.info).slice(0, 1)}
+                  </span>
+                  <span className="dash-card__body">
+                    <span className="dash-card__row">
+                      <span className="dash-card__title">{cardLabel(exam)}</span>
+                      <span className="dash-card__pct">{pct}%</span>
+                    </span>
+                    <span className="dash-card__meta">
+                      {fileType(exam.info)} • {formatDate(exam.updated_at)}
+                    </span>
+                    <span className="dash-card__bar">
+                      <span className="dash-card__fill" style={{ width: `${pct}%` }} />
+                    </span>
+                  </span>
+                </motion.button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </aside>
   );
 }

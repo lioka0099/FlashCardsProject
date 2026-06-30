@@ -35,21 +35,19 @@ describe("UploadExamForm", () => {
     pushMock.mockReset();
   });
 
-  it("renders the upload hero content and supported file types", () => {
+  it("renders the create-test hero content and dropzone", () => {
     renderWithQueryClient();
 
-    expect(screen.getByRole("heading", { name: "FlashCards" })).toBeInTheDocument();
-    expect(screen.getByText(/get a clean, sourced study deck/i)).toBeInTheDocument();
-    expect(screen.getByLabelText("Deck name")).toBeInTheDocument();
-    expect(screen.getByText("Add your study files")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create my cards" })).toBeInTheDocument();
-    expect(screen.getByText(/Drag in PDFs, DOCX, or TXT files/i)).toBeInTheDocument();
-    expect(screen.getByText("PDF")).toBeInTheDocument();
-    expect(screen.getByText("DOCX")).toBeInTheDocument();
-    expect(screen.getByText("TXT")).toBeInTheDocument();
-    expect(screen.getByText("Slides")).toBeInTheDocument();
-    expect(screen.getByText("Notes")).toBeInTheDocument();
-    expect(screen.getByText("Summaries")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Upload your document and create a smart test" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Our AI will analyze your document/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Give your test a name")).toBeInTheDocument();
+    expect(screen.getByText("Drag & drop your file here")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create Test" })).toBeInTheDocument();
+    expect(screen.getByText("PDF, DOCX, TXT up to 20MB")).toBeInTheDocument();
+    expect(screen.getByText("AI-Powered")).toBeInTheDocument();
+    expect(screen.getByText("Track Progress")).toBeInTheDocument();
   });
 
   it("uploads selected files and redirects to exam page", async () => {
@@ -74,10 +72,10 @@ describe("UploadExamForm", () => {
       },
     });
 
-    fireEvent.change(screen.getByLabelText("Deck name"), {
+    fireEvent.change(screen.getByLabelText("Give your test a name"), {
       target: { value: "Networks exam" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create my cards" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create Test" }));
 
     await waitFor(() => {
       expect(createExamFromUploadMock).toHaveBeenCalledTimes(1);
@@ -106,13 +104,13 @@ describe("UploadExamForm", () => {
     await waitFor(() => {
       expect(screen.getByText("first.pdf")).toBeInTheDocument();
       expect(screen.getByText("second.txt")).toBeInTheDocument();
-      expect(screen.getByText("2 files queued for a very productive glow-up")).toBeInTheDocument();
+      expect(screen.getByText("2 files ready to turn into a test")).toBeInTheDocument();
     });
   });
 
   it("adds dropped files to the existing list", async () => {
     const { container } = renderWithQueryClient();
-    const uploadCard = container.querySelector(".home-upload-flow");
+    const uploadCard = container.querySelector(".dash-create");
     if (!uploadCard) {
       throw new Error("Missing upload card");
     }
@@ -131,7 +129,7 @@ describe("UploadExamForm", () => {
     await waitFor(() => {
       expect(screen.getByText("a.pdf")).toBeInTheDocument();
       expect(screen.getByText("b.docx")).toBeInTheDocument();
-      expect(screen.getByText("2 files queued for a very productive glow-up")).toBeInTheDocument();
+      expect(screen.getByText("2 files ready to turn into a test")).toBeInTheDocument();
     });
   });
 
@@ -142,7 +140,7 @@ describe("UploadExamForm", () => {
       throw new Error("Missing upload input");
     }
 
-    const createMagicButton = screen.getByRole("button", { name: "Create my cards" });
+    const createMagicButton = screen.getByRole("button", { name: "Create Test" });
     expect(createMagicButton).toBeDisabled();
 
     fireEvent.change(fileInput, {
@@ -152,7 +150,7 @@ describe("UploadExamForm", () => {
     });
     expect(createMagicButton).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText("Deck name"), {
+    fireEvent.change(screen.getByLabelText("Give your test a name"), {
       target: { value: "Ready exam title" },
     });
     expect(createMagicButton).not.toBeDisabled();
@@ -179,10 +177,10 @@ describe("UploadExamForm", () => {
         files: [new File(["hello"], "notes.txt", { type: "text/plain" })],
       },
     });
-    fireEvent.change(screen.getByLabelText("Deck name"), {
+    fireEvent.change(screen.getByLabelText("Give your test a name"), {
       target: { value: "Networks exam" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create my cards" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create Test" }));
 
     await waitFor(() => {
       expect(screen.getByText("Please review your files and title, then try again.")).toBeInTheDocument();

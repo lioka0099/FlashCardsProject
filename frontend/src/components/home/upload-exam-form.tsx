@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import {
-  useId,
   useEffect,
   useMemo,
   useRef,
@@ -13,39 +12,21 @@ import {
 } from "react";
 import { motion } from "framer-motion";
 import { useMutation } from "@tanstack/react-query";
+import { Brain, Sparkles, Target, TrendingUp, UploadCloud } from "lucide-react";
 import { createExamFromUpload } from "@/lib/api/client";
 import { mapHomeApiError } from "@/lib/api/ui-error";
-import { MagicSparklesBackground } from "@/components/home/magic-sparkles-background";
 import { InlineError } from "@/components/common/inline-error";
 import { MagicUploadProgress } from "@/components/home/magic-upload-progress";
 import { useGuestSession } from "@/lib/session/guest-session";
 
 const SUPPORTED_EXTENSIONS = [".pdf", ".docx", ".txt"];
-const sectionMotion = {
-  hidden: { opacity: 0, y: 28 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.55, ease: "easeOut" as const },
-  },
-};
 
 function buildFileKey(file: File) {
   return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
-function extensionTone(fileName: string) {
-  const lowered = fileName.toLowerCase();
-  if (lowered.endsWith(".pdf")) {
-    return "pdf";
-  }
-  if (lowered.endsWith(".docx")) {
-    return "docx";
-  }
-  if (lowered.endsWith(".txt")) {
-    return "txt";
-  }
-  return "default";
+function fileTag(fileName: string) {
+  return fileName.split(".").pop()?.toUpperCase() ?? "FILE";
 }
 
 type SelectedUpload = {
@@ -57,15 +38,16 @@ type UploadExamFormProps = {
   id?: string;
   sectionRef?: RefObject<HTMLElement | null>;
   onFocusWithin?: () => void;
+  deckNameInputId?: string;
 };
 
 export function UploadExamForm({
   id,
   sectionRef,
   onFocusWithin,
+  deckNameInputId = "dash-deck-name",
 }: UploadExamFormProps) {
   const router = useRouter();
-  const titleInputId = useId();
   const filesInputRef = useRef<HTMLInputElement | null>(null);
   const uploadIdRef = useRef(0);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -82,16 +64,14 @@ export function UploadExamForm({
     },
   });
 
-  const selectedSummary = useMemo(() => {
+  const fileHint = useMemo(() => {
     if (selectedUploads.length === 0) {
-      return "No files yet. The stage is politely waiting.";
+      return "No files yet. Drop your study material to get started.";
     }
-
     if (selectedUploads.length === 1) {
-      return `Ready to study: ${selectedUploads[0].file.name}`;
+      return `Ready: ${selectedUploads[0].file.name}`;
     }
-
-    return `${selectedUploads.length} files queued for a very productive glow-up`;
+    return `${selectedUploads.length} files ready to turn into a test`;
   }, [selectedUploads]);
   const titleValue = title.trim();
   const hasFiles = selectedUploads.length > 0;
@@ -203,53 +183,78 @@ export function UploadExamForm({
     <section
       id={id}
       ref={sectionRef}
-      className="home-upload-flow home-upload-flow--single"
+      className="dash-create"
       tabIndex={-1}
       onFocus={onFocusWithin}
       onDrop={onDrop}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
-      aria-label="Create exam from files"
+      aria-label="Create test from files"
     >
-      <MagicSparklesBackground />
-
-      <motion.form
-        className="home-upload-flow__form home-upload-flow__form--single"
-        onSubmit={onSubmit}
-        initial="hidden"
-        animate="visible"
-      >
-        <motion.div
-          variants={sectionMotion}
-          className="home-upload-composer"
-          aria-label="Create your study deck"
-        >
-          <header className="home-upload-composer__hero">
-            <h1 className="home-upload-card__title">FlashCards</h1>
-            <p className="home-upload-card__subtitle">
-              Upload your material and get a clean, sourced study deck in one
-              simple move.
+      <div className="dash-create__card">
+        <form className="dash-create__grid" onSubmit={onSubmit}>
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: "easeOut" }}
+          >
+            <span className="dash-create__eyebrow">
+              <Sparkles size={16} />
+              Create a new test
+            </span>
+            <h2 className="dash-create__title">
+              Upload your document and create a <em>smart test</em>
+            </h2>
+            <p className="dash-create__desc">
+              Our AI will analyze your document and generate high-quality
+              flashcards, tailored to your goals.
             </p>
-          </header>
 
-          <section className="home-upload-card__panel home-upload-card__panel--animated home-upload-composer__panel">
-            <div className="home-upload-composer__title-row">
-              <label className="home-upload-card__label" htmlFor={titleInputId}>
-                Deck name
-              </label>
-              <input
-                className="home-upload-card__input"
-                id={titleInputId}
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="What are we studying today?"
+            <label className="dash-create__label" htmlFor={deckNameInputId}>
+              Give your test a name
+            </label>
+            <input
+              className="dash-create__input"
+              id={deckNameInputId}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Enter test name..."
+            />
+
+            {uploadError ? (
+              <p className="dash-msg dash-msg--err" role="alert">
+                {uploadError}
+              </p>
+            ) : null}
+
+            {uploadMutation.isError ? (
+              <InlineError
+                message={mapHomeApiError(uploadMutation.error, "home.upload.create_exam").message}
+                messageClassName="dash-msg dash-msg--err"
               />
-            </div>
+            ) : null}
 
+            {uploadMutation.isPending ? (
+              <MagicUploadProgress />
+            ) : (
+              <button
+                className="dash-submit"
+                type="submit"
+                disabled={!hasFiles || !hasTitle}
+              >
+                <Sparkles size={18} />
+                Create Test
+              </button>
+            )}
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: "easeOut", delay: 0.08 }}
+          >
             <div
-              className={`home-upload-card__dropzone home-upload-card__dropzone--composer${
-                isDragActive ? " home-upload-card__dropzone--active" : ""
-              }`}
+              className={`dash-drop${isDragActive ? " dash-drop--active" : ""}`}
               role="button"
               tabIndex={0}
               onClick={() => filesInputRef.current?.click()}
@@ -261,59 +266,20 @@ export function UploadExamForm({
               }}
               aria-label="Drop files here or click to choose files"
             >
-              <p className="home-upload-card__dropzone-title">
-                {isDragActive
-                  ? "Drop them here"
-                  : "Add your study files"}
+              <UploadCloud className="dash-drop__icon" size={56} aria-hidden="true" />
+              <p className="dash-drop__title">
+                {isDragActive ? "Drop them here" : "Drag & drop your file here"}
               </p>
-              <p className="home-upload-card__dropzone-hint">
-                Drag in PDFs, DOCX, or TXT files, or choose them from your
-                device.
-              </p>
-              {selectedUploads.length === 0 ? (
-                <div
-                  className="home-upload-card__doc-preview home-upload-card__doc-preview--compact"
-                  aria-label="Supported file examples"
-                >
-                  <article className="home-upload-card__doc-card home-upload-card__doc-card--pdf">
-                    <span className="home-upload-card__doc-badge">PDF</span>
-                    <span className="home-upload-card__doc-icon" aria-hidden="true">📄</span>
-                    <span className="home-upload-card__doc-label">Slides</span>
-                  </article>
-                  <article className="home-upload-card__doc-card home-upload-card__doc-card--docx">
-                    <span className="home-upload-card__doc-badge">DOCX</span>
-                    <span className="home-upload-card__doc-icon" aria-hidden="true">📝</span>
-                    <span className="home-upload-card__doc-label">Notes</span>
-                  </article>
-                  <article className="home-upload-card__doc-card home-upload-card__doc-card--txt">
-                    <span className="home-upload-card__doc-badge">TXT</span>
-                    <span className="home-upload-card__doc-icon" aria-hidden="true">✦</span>
-                    <span className="home-upload-card__doc-label">Summaries</span>
-                  </article>
-                </div>
-              ) : (
-                <ul
-                  className="home-upload-card__file-list home-upload-card__file-list--composer"
-                  aria-label="Selected files"
-                >
+              <p className="dash-drop__hint">PDF, DOCX, TXT up to 20MB</p>
+
+              {selectedUploads.length > 0 ? (
+                <ul className="dash-files" aria-label="Selected files">
                   {selectedUploads.map((upload) => (
-                    <li key={upload.id} className="home-upload-card__file-item">
-                      <span
-                        className={`home-upload-card__file-icon home-upload-card__file-icon--${extensionTone(upload.file.name)}`}
-                      >
-                        {upload.file.name.split(".").pop()?.toUpperCase() ??
-                          "FILE"}
-                      </span>
-                      <div className="home-upload-card__file-meta">
-                        <span className="home-upload-card__file-name">
-                          {upload.file.name}
-                        </span>
-                        <span className="home-upload-card__file-kind">
-                          Study material
-                        </span>
-                      </div>
+                    <li key={upload.id} className="dash-file">
+                      <span className="dash-file__tag">{fileTag(upload.file.name)}</span>
+                      <span className="dash-file__name">{upload.file.name}</span>
                       <button
-                        className="home-upload-card__file-remove"
+                        className="dash-file__remove"
                         type="button"
                         aria-label={`Remove ${upload.file.name}`}
                         onClick={(event) => {
@@ -328,62 +294,13 @@ export function UploadExamForm({
                     </li>
                   ))}
                 </ul>
-              )}
-              <button
-                className="home-upload-card__pick"
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  filesInputRef.current?.click();
-                }}
-                disabled={uploadMutation.isPending}
-              >
-                Choose files
-              </button>
-            </div>
-
-            <div className="home-upload-card__selected-wrap" aria-live="polite">
-              <p className="home-upload-card__selected">{selectedSummary}</p>
-              {selectedUploads.length > 0 ? (
-                <button
-                  className="home-upload-card__clear"
-                  type="button"
-                  onClick={() => setSelectedUploads([])}
-                >
-                  Clear the guest list
-                </button>
               ) : null}
             </div>
 
-            {uploadError ? (
-              <p className="home-upload-card__error" role="alert">
-                {uploadError}
-              </p>
-            ) : null}
-
-              {uploadMutation.isError ? (
-                <InlineError
-                  message={mapHomeApiError(uploadMutation.error, "home.upload.create_exam").message}
-                  messageClassName="home-upload-card__error"
-                />
-              ) : null}
-
-              {uploadMutation.isPending ? <MagicUploadProgress /> : null}
-
-              {!uploadMutation.isPending ? (
-                <div className="home-upload-card__actions home-upload-card__actions--composer">
-                  <button
-                    className={`home-upload-card__action home-upload-card__action--primary home-upload-card__magic-button home-upload-card__magic-button--large${
-                      hasFiles && hasTitle ? " is-ready" : ""
-                    }`}
-                    type="submit"
-                    disabled={!hasFiles || !hasTitle}
-                  >
-                    <span className="home-upload-card__magic-button-text">Create my cards</span>
-                  </button>
-                </div>
-              ) : null}
-          </section>
+            <p className="dash-filehint" aria-live="polite">
+              {fileHint}
+            </p>
+          </motion.div>
 
           <input
             ref={filesInputRef}
@@ -396,8 +313,41 @@ export function UploadExamForm({
             }}
             accept={SUPPORTED_EXTENSIONS.join(",")}
           />
-        </motion.div>
-      </motion.form>
+        </form>
+
+        <div className="dash-features">
+          <article className="dash-feature">
+            <span className="dash-feature__icon" aria-hidden="true">
+              <Brain size={20} />
+            </span>
+            <h3 className="dash-feature__title">AI-Powered</h3>
+            <p className="dash-feature__text">
+              Advanced AI creates questions that match your document&rsquo;s
+              content and your learning goals.
+            </p>
+          </article>
+          <article className="dash-feature">
+            <span className="dash-feature__icon" aria-hidden="true">
+              <Target size={20} />
+            </span>
+            <h3 className="dash-feature__title">Smart &amp; Adaptive</h3>
+            <p className="dash-feature__text">
+              Questions adapt to your understanding and help you focus on what
+              matters.
+            </p>
+          </article>
+          <article className="dash-feature">
+            <span className="dash-feature__icon" aria-hidden="true">
+              <TrendingUp size={20} />
+            </span>
+            <h3 className="dash-feature__title">Track Progress</h3>
+            <p className="dash-feature__text">
+              Monitor your progress and see how your understanding improves over
+              time.
+            </p>
+          </article>
+        </div>
+      </div>
     </section>
   );
 }

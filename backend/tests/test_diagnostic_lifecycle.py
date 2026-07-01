@@ -107,17 +107,14 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         dl_mod.generate_starter_cards_v2 = fake_generate_starter_cards_v2
         try:
             d1 = _write_text_doc("p3_bootstrap_1.txt", "alpha beta gamma")
-            resp = self.client.post(
-                "/exams/from-upload",
-                data={"user_id": "u1", "title": "Exam 1", "mode": "mastery"},
-                files=[("files", ("p3_bootstrap_1.txt", Path(d1).read_text(encoding="utf-8"), "text/plain"))],
-            )
-            self.assertEqual(resp.status_code, 200)
-            payload = resp.json()
-            exam_id = payload["exam_id"]
-            self.assertEqual(payload["state"], "diagnostic")
-            self.assertEqual(payload["diagnostic_total"], 2)
-            self.assertEqual(payload["diagnostic_answered"], 0)
+            from app.services.diagnostic_lifecycle import DiagnosticLifecycleService
+            result = DiagnosticLifecycleService(store=VectorStore(basepath=str(_TEST_ROOT / "store"))).bootstrap_exam_from_upload(
+                user_id="u1", title="Exam 1", mode="mastery", paths=[d1],
+                info={"source": "from_upload", "filenames": ["p3_bootstrap_1.txt"]})
+            exam_id = result.exam_id
+            self.assertEqual(result.state, "diagnostic")
+            self.assertEqual(result.diagnostic_total, 2)
+            self.assertEqual(result.diagnostic_answered, 0)
 
             exam_resp = self.client.get(f"/exams/{exam_id}", params={"user_id": "u1"})
             self.assertEqual(exam_resp.status_code, 200)
@@ -205,12 +202,10 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         dl_mod.generate_starter_cards_v2 = fake_generate_starter_cards_v2
         try:
             d1 = _write_text_doc("p3_math_profile_timing.txt", "44 examples and 100 rows, but conceptual notes.")
-            resp = self.client.post(
-                "/exams/from-upload",
-                data={"user_id": "u-profile", "title": "Profile timing", "mode": "mastery"},
-                files=[("files", ("p3_math_profile_timing.txt", Path(d1).read_text(encoding="utf-8"), "text/plain"))],
-            )
-            self.assertEqual(resp.status_code, 200)
+            from app.services.diagnostic_lifecycle import DiagnosticLifecycleService
+            DiagnosticLifecycleService(store=VectorStore(basepath=str(_TEST_ROOT / "store"))).bootstrap_exam_from_upload(
+                user_id="u-profile", title="Profile timing", mode="mastery", paths=[d1],
+                info={"source": "from_upload", "filenames": ["p3_math_profile_timing.txt"]})
         finally:
             dl_mod.build_topics_for_exam = original_build_topics
             dl_mod.generate_starter_cards_v2 = original_generate
@@ -268,14 +263,11 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         dl_mod.generate_starter_cards_v2 = fake_generate_partial
         try:
             d1 = _write_text_doc("p3_bootstrap_fail.txt", "alpha beta gamma")
-            resp = self.client.post(
-                "/exams/from-upload",
-                data={"user_id": "u2", "title": "Exam fail", "mode": "mastery"},
-                files=[("files", ("p3_bootstrap_fail.txt", Path(d1).read_text(encoding="utf-8"), "text/plain"))],
-            )
-            self.assertEqual(resp.status_code, 422)
-            payload = resp.json()
-            self.assertEqual(payload.get("error"), "diagnostic_bootstrap_failed")
+            from app.services.diagnostic_lifecycle import DiagnosticLifecycleService, DiagnosticBootstrapError
+            with self.assertRaises(DiagnosticBootstrapError):
+                DiagnosticLifecycleService(store=VectorStore(basepath=str(_TEST_ROOT / "store"))).bootstrap_exam_from_upload(
+                    user_id="u2", title="Exam fail", mode="mastery", paths=[d1],
+                    info={"source": "from_upload", "filenames": ["p3_bootstrap_fail.txt"]})
 
             store = VectorStore(basepath=str(_TEST_ROOT / "store"))
             exams = store.db.list_exams(user_id="u2")
@@ -335,15 +327,12 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         dl_mod.generate_starter_cards_v2 = fake_generate_partial_but_ok
         try:
             d1 = _write_text_doc("p3_bootstrap_80pct.txt", "alpha beta gamma")
-            resp = self.client.post(
-                "/exams/from-upload",
-                data={"user_id": "u3", "title": "Exam 80%", "mode": "mastery"},
-                files=[("files", ("p3_bootstrap_80pct.txt", Path(d1).read_text(encoding="utf-8"), "text/plain"))],
-            )
-            self.assertEqual(resp.status_code, 200)
-            payload = resp.json()
-            self.assertEqual(payload["state"], "diagnostic")
-            self.assertEqual(payload["diagnostic_total"], 5)
+            from app.services.diagnostic_lifecycle import DiagnosticLifecycleService
+            result = DiagnosticLifecycleService(store=VectorStore(basepath=str(_TEST_ROOT / "store"))).bootstrap_exam_from_upload(
+                user_id="u3", title="Exam 80%", mode="mastery", paths=[d1],
+                info={"source": "from_upload", "filenames": ["p3_bootstrap_80pct.txt"]})
+            self.assertEqual(result.state, "diagnostic")
+            self.assertEqual(result.diagnostic_total, 5)
         finally:
             dl_mod.build_topics_for_exam = original_build_topics
             dl_mod.generate_starter_cards_v2 = original_generate

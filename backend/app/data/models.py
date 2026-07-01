@@ -160,6 +160,10 @@ class Exam(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
     info: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    job_status: Mapped[Optional[str]] = mapped_column(String(16), nullable=True, index=True)
+    job_payload: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    job_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    job_heartbeat_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="exams")

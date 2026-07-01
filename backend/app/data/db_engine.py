@@ -158,6 +158,10 @@ def _apply_sqlite_compat_migrations() -> None:
         "diagnostic_answered": "ALTER TABLE exams ADD COLUMN diagnostic_answered INTEGER DEFAULT 0",
         "diagnostic_started_at": "ALTER TABLE exams ADD COLUMN diagnostic_started_at DATETIME",
         "diagnostic_completed_at": "ALTER TABLE exams ADD COLUMN diagnostic_completed_at DATETIME",
+        "job_status": "ALTER TABLE exams ADD COLUMN job_status VARCHAR(16)",
+        "job_payload": "ALTER TABLE exams ADD COLUMN job_payload JSON",
+        "job_attempts": "ALTER TABLE exams ADD COLUMN job_attempts INTEGER DEFAULT 0",
+        "job_heartbeat_at": "ALTER TABLE exams ADD COLUMN job_heartbeat_at DATETIME",
     }
     required_card_columns = {
         "card_type": "ALTER TABLE cards ADD COLUMN card_type VARCHAR(32) DEFAULT 'learning'",

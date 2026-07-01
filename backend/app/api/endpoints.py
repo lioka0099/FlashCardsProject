@@ -42,8 +42,14 @@ from app.services.review_service import ReviewService
 from app.services.session_card_generation import SessionCardGenerationService
 from app.services.session_planner import SessionPlannerService
 from app.services.context_packs import build_diverse_chunk_pack
+from app.services.job_worker import start_embedded_worker
 
 app = FastAPI(title="DocQA Proto")
+
+
+@app.on_event("startup")
+def _start_worker() -> None:
+    start_embedded_worker()
 
 
 def _latest_review_info_by_card(
@@ -165,6 +171,9 @@ def _exam_to_response(exam: Any) -> ExamResponse:
     )
 
 
+SUPPORTED_UPLOAD_EXTENSIONS = (".pdf", ".docx", ".txt")
+
+
 @app.post("/exams/from-upload")
 async def create_exam_from_upload_endpoint(
     files: List[UploadFile] = File(...),
@@ -172,40 +181,28 @@ async def create_exam_from_upload_endpoint(
     title: str = Form(...),
     mode: str = Form(default="mastery"),
 ):
+    for f in files:
+        name = (f.filename or "").lower()
+        if not name.endswith(SUPPORTED_UPLOAD_EXTENSIONS):
+            return JSONResponse(
+                {"error": "unsupported_document_type",
+                 "message": f"Unsupported file type: {f.filename}. Use PDF, DOCX, or TXT."},
+                status_code=422,
+            )
+
     temp_paths, filenames = _extract_uploaded_files(files)
     store = VectorStore()
     svc = DiagnosticLifecycleService(store=store)
-    try:
-        result = svc.bootstrap_exam_from_upload(
-            user_id=user_id,
-            title=title,
-            mode=mode,
-            paths=[str(p) for p in temp_paths],
-            info={"source": "from_upload", "filenames": filenames},
-        )
-    except UnsupportedDocumentTypeError as exc:
-        return JSONResponse(
-            {"error": "unsupported_document_type", "message": str(exc)},
-            status_code=422,
-        )
-    except DiagnosticBootstrapError as exc:
-        return JSONResponse(
-            {"error": "diagnostic_bootstrap_failed", "message": str(exc)},
-            status_code=422,
-        )
-    except ImmutableExamError as exc:
-        return JSONResponse(
-            _immutable_exam_error_payload(exam_id=exc.exam_id, message=str(exc)),
-            status_code=409,
-        )
-    return {
-        "exam_id": result.exam_id,
-        "state": result.state,
-        "diagnostic_total": result.diagnostic_total,
-        "diagnostic_answered": result.diagnostic_answered,
-        "cards_generated": result.cards_generated,
-        "topic_count": result.topic_count,
-    }
+    exam_id = svc.create_processing_exam(
+        user_id=user_id, title=title, mode=mode,
+        info={"source": "from_upload", "filenames": filenames},
+    )
+    store.db.enqueue_job(
+        exam_id=exam_id,
+        payload={"paths": [str(p) for p in temp_paths], "filenames": filenames,
+                 "title": title, "mode": mode},
+    )
+    return {"exam_id": exam_id, "state": "processing"}
 
 
 @app.get("/exams", response_model=ExamListResponse)
@@ -215,6 +212,7 @@ async def list_exams_endpoint(
 ):
     store = VectorStore()
     exams = store.db.list_exams(user_id=user_id, limit=limit)
+    exams = [x for x in exams if getattr(x, "state", None) != "failed"]
     return ExamListResponse(exams=[_exam_to_response(x) for x in exams])
 
 

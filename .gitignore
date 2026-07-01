@@ -65,3 +65,8 @@ pnpm-debug.log*
 # local agent metadata
 .claude/
 frontend/.claude/
+
+# local docs workspace notes
+/docs/
+docs/superpowers/
+docs/superpowers/specs/

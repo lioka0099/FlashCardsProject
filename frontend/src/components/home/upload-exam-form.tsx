@@ -16,7 +16,6 @@ import { Brain, Sparkles, Target, TrendingUp, UploadCloud } from "lucide-react";
 import { createExamFromUpload } from "@/lib/api/client";
 import { mapHomeApiError } from "@/lib/api/ui-error";
 import { InlineError } from "@/components/common/inline-error";
-import { MagicUploadProgress } from "@/components/home/magic-upload-progress";
 import { useGuestSession } from "@/lib/session/guest-session";
 
 const SUPPORTED_EXTENSIONS = [".pdf", ".docx", ".txt"];
@@ -60,7 +59,7 @@ export function UploadExamForm({
   const uploadMutation = useMutation({
     mutationFn: createExamFromUpload,
     onSuccess: (result) => {
-      router.push(`/exams/${result.exam_id}`);
+      router.push(`/exams/${result.exam_id}/creating`);
     },
   });
 
@@ -234,18 +233,14 @@ export function UploadExamForm({
               />
             ) : null}
 
-            {uploadMutation.isPending ? (
-              <MagicUploadProgress />
-            ) : (
-              <button
-                className="dash-submit"
-                type="submit"
-                disabled={!hasFiles || !hasTitle}
-              >
-                <Sparkles size={18} />
-                Create Test
-              </button>
-            )}
+            <button
+              className="dash-submit"
+              type="submit"
+              disabled={!hasFiles || !hasTitle || uploadMutation.isPending}
+            >
+              <Sparkles size={18} />
+              {uploadMutation.isPending ? "Creating…" : "Create Test"}
+            </button>
           </motion.div>
 
           <motion.div

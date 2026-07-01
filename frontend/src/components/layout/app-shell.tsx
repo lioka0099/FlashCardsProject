@@ -5,8 +5,10 @@ import { usePathname } from "next/navigation";
 import type { PropsWithChildren } from "react";
 
 export function AppShell({ children }: PropsWithChildren) {
-  // Home renders its own full-bleed chrome (brand lives in the sidebar).
-  const showHeader = usePathname() !== "/";
+  // Home and the test-creation loading screen render their own full-bleed
+  // chrome, so the shared app header is hidden on both.
+  const pathname = usePathname();
+  const showHeader = pathname !== "/" && !pathname.endsWith("/creating");
 
   return (
     <div className="app-shell">

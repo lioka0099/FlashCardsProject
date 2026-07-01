@@ -1,0 +1,109 @@
+/* Full-bleed background matching the home screen (--bg: #f7f7fb) so the
+   loading/error screen is homogeneous with the rest of the app. */
+.ct-screen {
+  min-height: 100vh;
+  background: #f7f7fb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ct {
+  --p: #6f42c1; --accent: #2db7c5; --success: #22c55e;
+  --n900: #0f172a; --n500: #64748b; --line: #ececf3; --card: #fff; --p-soft: #ede7f8;
+  width: 100%;
+  max-width: 1120px; margin: 0 auto; padding: 1.5rem 1.5rem; color: var(--n900);
+  font-family: var(--font-sans);
+}
+.ct__head { text-align: center; display: flex; flex-direction: column; align-items: center; gap: .35rem; }
+.ct__sparkle { color: var(--p); }
+.ct__title { font-family: var(--font-display); font-size: 2rem; font-weight: 800; margin: .15rem 0 0; }
+.ct__sub { color: var(--n500); max-width: 36ch; margin: 0; }
+.ct__file { display: inline-flex; align-items: center; gap: .5rem; margin-top: .6rem;
+  padding: .45rem .9rem; border: 1px solid var(--line); border-radius: 12px; background: var(--card);
+  color: var(--p); font-weight: 600; }
+.ct__card { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.25rem;
+  background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+  box-shadow: 0 18px 50px rgba(15,23,42,.07); padding: 1.5rem; }
+.ct__steps { list-style: none; margin: 0; padding: 0; }
+.ct-step { display: grid; grid-template-columns: auto 1fr; gap: .9rem; }
+.ct-step__rail { position: relative; display: flex; flex-direction: column; align-items: center; }
+.ct-step__rail::after { content: ""; flex: 1; width: 2px; background: var(--line); margin: 4px 0; }
+.ct-step:last-child .ct-step__rail::after { display: none; }
+.ct-step__body { padding-bottom: .85rem; }
+.ct-step__label { display: block; font-weight: 700; }
+.ct-step__detail { display: block; color: var(--n500); font-size: .88rem; }
+.ct-step__check { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%;
+  background: color-mix(in srgb, var(--success) 16%, #fff); color: var(--success); }
+.ct-step__spin { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%;
+  background: var(--p-soft); color: var(--p); animation: ct-spin 1s linear infinite; }
+.ct-step__dot { display: block; width: 2rem; height: 2rem; border-radius: 50%;
+  border: 2px solid var(--line); }
+.ct-step[data-status="active"] .ct-step__label { color: var(--p); }
+@keyframes ct-spin { to { transform: rotate(360deg); } }
+.ct__aside { display: flex; flex-direction: column; gap: 1rem; }
+.ct__illus { position: relative; flex: 1; display: grid; place-items: center; color: var(--p);
+  background: radial-gradient(circle at 50% 45%, var(--p-soft), transparent 70%); border-radius: 16px; min-height: 11rem; }
+/* Elliptical orbit ring around the document */
+/* Fixed size so the longest axis stays within the frame at every rotation
+   (percentage sizing made it too elongated and it spilled out when vertical). */
+.ct__orbit { position: absolute; width: 9.5rem; height: 7rem; border: 2px solid color-mix(in srgb, var(--p) 28%, #fff);
+  border-radius: 50%; transform: rotate(-18deg); opacity: .7; }
+/* Central document card — gentle breathing float */
+.ct__doc { position: relative; display: grid; place-items: center; width: 5.5rem; height: 6.5rem;
+  border-radius: 12px; background: #fff; color: var(--p);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, .12);
+  animation: ct-doc-float 4.5s ease-in-out infinite; }
+/* Slowly drifting orbit ring */
+.ct__orbit { animation: ct-orbit-drift 22s linear infinite; }
+/* Floating colored tiles — each bobs out of sync (rotate kept via the
+   individual `rotate` property so the float `translate` composes cleanly) */
+.ct__tile { position: absolute; display: grid; place-items: center; width: 2.3rem; height: 2.3rem;
+  border-radius: 12px; color: #fff; box-shadow: 0 10px 22px rgba(15, 23, 42, .18);
+  animation: ct-float 4s ease-in-out infinite; }
+.ct__tile--list { left: 16%; top: 22%; background: var(--accent); rotate: -8deg; animation-duration: 3.6s; }
+.ct__tile--brain { right: 18%; top: 16%; background: var(--p); rotate: 7deg; animation-duration: 4.4s; animation-delay: .5s; }
+.ct__tile--check { right: 20%; bottom: 18%; background: var(--success); rotate: -6deg; animation-duration: 3.9s; animation-delay: .9s; }
+/* Sparkle dots — twinkle */
+.ct__spark { position: absolute; width: 6px; height: 6px; border-radius: 50%;
+  background: color-mix(in srgb, var(--p) 45%, #fff);
+  animation: ct-twinkle 2.6s ease-in-out infinite; }
+.ct__spark--a { left: 24%; bottom: 24%; }
+.ct__spark--b { right: 30%; top: 34%; width: 4px; height: 4px; animation-delay: .7s; }
+.ct__spark--c { left: 40%; top: 14%; width: 4px; height: 4px; background: color-mix(in srgb, var(--accent) 55%, #fff); animation-delay: 1.3s; }
+
+@keyframes ct-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -7px; } }
+@keyframes ct-doc-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -6px; } }
+@keyframes ct-twinkle { 0%, 100% { opacity: .35; scale: .8; } 50% { opacity: 1; scale: 1.15; } }
+@keyframes ct-orbit-drift { to { rotate: 360deg; } }
+.ct__callout { display: flex; align-items: center; gap: .75rem;
+  border: 1px solid color-mix(in srgb, var(--p) 22%, #fff); border-radius: 14px; padding: 1rem;
+  background: color-mix(in srgb, var(--p) 14%, #fff); }
+.ct__callout-icon { flex-shrink: 0; color: var(--p); }
+.ct__callout strong { color: var(--p); }
+.ct__callout p { margin: .35rem 0 0; color: var(--n500); font-size: .9rem; }
+/* Reserve a stable 2-line height so rotating tips (which vary between one and
+   two lines) don't change the layout height and jolt the vertically-centered
+   screen up/down every 5s. */
+.ct__tip { display: flex; align-items: center; gap: .75rem; margin-top: 1rem; padding: .75rem 1rem;
+  min-height: 4.25rem; box-sizing: border-box;
+  border-radius: 16px; border: 1px solid color-mix(in srgb, var(--p) 22%, #fff);
+  background: color-mix(in srgb, var(--p) 14%, #fff); color: var(--n900); }
+.ct__tip-icon { position: relative; flex-shrink: 0; display: grid; place-items: center; width: 2.4rem; height: 2.4rem;
+  border-radius: 50%; background: color-mix(in srgb, var(--p) 20%, #fff); color: var(--p); }
+/* Radiating rays around the bulb so it reads as "lighting up". */
+.ct__tip-icon::before { content: ""; position: absolute; inset: -5px; border-radius: 50%; opacity: .55;
+  background: repeating-conic-gradient(var(--p) 0 1.5deg, transparent 1.5deg 30deg);
+  -webkit-mask: radial-gradient(circle, transparent 62%, #000 64%, #000 70%, transparent 72%);
+  mask: radial-gradient(circle, transparent 62%, #000 64%, #000 70%, transparent 72%); }
+.ct__tip p { margin: 0; font-size: .9rem; }
+.ct__tip strong { color: var(--p); }
+.ct__tip-count { margin-left: auto; white-space: nowrap; color: var(--n500); font-size: .82rem; }
+.ct__foot { text-align: center; color: var(--n500); font-size: .85rem; margin-top: .9rem; }
+@media (max-width: 820px) { .ct__card { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) {
+  .ct-step__spin,
+  .ct__doc,
+  .ct__orbit,
+  .ct__tile,
+  .ct__spark { animation: none; }
+}

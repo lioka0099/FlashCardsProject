@@ -91,13 +91,23 @@ type CreateExamFromUploadPayload = {
   mode?: string;
 };
 
+export type ProgressStepStatus = "pending" | "active" | "done" | "failed";
+
+export type ProgressStep = {
+  key: string;
+  label: string;
+  detail: string;
+  status: ProgressStepStatus;
+};
+
+export type BootstrapProgress = {
+  steps: ProgressStep[];
+  updated_at: string;
+};
+
 export type CreateExamFromUploadResponse = {
   exam_id: string;
   state: string;
-  diagnostic_total: number;
-  diagnostic_answered: number;
-  cards_generated: number;
-  topic_count: number;
 };
 
 export type ProofSpan = {

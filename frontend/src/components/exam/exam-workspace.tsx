@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -36,6 +37,7 @@ function coalesceConsecutiveCards(cards: Card[]) {
 
 export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { userId } = useGuestSession();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isAnswerVisible, setIsAnswerVisible] = useState(false);
@@ -64,6 +66,12 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
     retry: 1,
     refetchOnWindowFocus: false,
   });
+
+  useEffect(() => {
+    if (examQuery.data?.state === "processing") {
+      router.replace(`/exams/${examId}/creating`);
+    }
+  }, [examQuery.data?.state, examId, router]);
 
   const initialCard = (sessionQuery.data?.card as Card | null) ?? null;
   const seededHistoryCards = historyCards.length > 0 ? historyCards : initialCard ? [initialCard] : [];

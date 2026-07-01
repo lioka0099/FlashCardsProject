@@ -53,11 +53,7 @@ describe("UploadExamForm", () => {
   it("uploads selected files and redirects to exam page", async () => {
     createExamFromUploadMock.mockResolvedValue({
       exam_id: "exam-123",
-      state: "diagnostic",
-      diagnostic_total: 0,
-      diagnostic_answered: 0,
-      cards_generated: 0,
-      topic_count: 0,
+      state: "processing",
     });
 
     const { container } = renderWithQueryClient();
@@ -79,7 +75,7 @@ describe("UploadExamForm", () => {
 
     await waitFor(() => {
       expect(createExamFromUploadMock).toHaveBeenCalledTimes(1);
-      expect(pushMock).toHaveBeenCalledWith("/exams/exam-123");
+      expect(pushMock).toHaveBeenCalledWith("/exams/exam-123/creating");
     });
   });
 

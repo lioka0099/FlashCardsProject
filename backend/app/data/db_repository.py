@@ -15,9 +15,9 @@ from typing import List, Dict, Optional, Any, Iterable, Sequence
 from dataclasses import dataclass
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
-from sqlalchemy import select, delete, and_, func
+from sqlalchemy import select, delete, and_, or_, func
 from sqlalchemy.orm import Session
 
 from app.data.db_engine import get_db, init_db, DATABASE_URL
@@ -31,10 +31,20 @@ from app.data.models import (
 
 logger = logging.getLogger(__name__)
 
+MAX_JOB_ATTEMPTS = 3
+
 
 # =============================================================================
 # DATACLASSES
 # =============================================================================
+
+@dataclass
+class JobData:
+    exam_id: str
+    user_id: str
+    payload: dict
+    attempts: int
+
 
 @dataclass
 class StoredChunk:
@@ -531,6 +541,12 @@ class DBRepository:
             if diagnostic_completed_at is not None:
                 row.diagnostic_completed_at = diagnostic_completed_at
             if info_patch:
+                # ponytail: read-modify-write on the whole `info` JSON blob is
+                # last-write-wins. Safe under the single embedded worker (writes are
+                # sequential; the worker's reporter only bumps the heartbeat column,
+                # not info). Multi-worker cloud needs a locked RMW or a JSON-field
+                # update, else concurrent writers clobber sibling keys (progress vs
+                # math_profile vs bootstrap_error).
                 merged = dict(row.info or {})
                 merged.update(info_patch)
                 row.info = merged
@@ -541,6 +557,64 @@ class DBRepository:
             return
         with get_db() as db:
             _apply(db)
+
+    def enqueue_job(self, *, exam_id: str, payload: dict) -> None:
+        with get_db() as db:
+            row = db.query(Exam).filter(Exam.exam_id == exam_id).first()
+            if row is None:
+                raise ValueError(f"Exam not found: {exam_id}")
+            row.job_status = "queued"
+            row.job_payload = payload
+            row.job_attempts = 0
+            row.job_heartbeat_at = None
+
+    def claim_next_job(self, *, stale_seconds: int = 300) -> Optional[JobData]:
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(seconds=stale_seconds)
+        with get_db() as db:
+            # ponytail: plain SELECT is correct for the single embedded worker.
+            # For multi-worker cloud (Postgres), add .with_for_update(skip_locked=True).
+            # ponytail: stale-running reclaim only works if ANOTHER worker polls.
+            # In single-embedded-worker mode a thread death without process restart
+            # leaves the exam stuck at state="processing" forever (the dead worker is
+            # the only caller of this). Process restart self-heals after stale_seconds.
+            # Pre-cloud follow-up: a max-age sweep flipping ancient processing -> failed,
+            # plus a client-side "taking longer than expected" affordance.
+            row = (
+                db.query(Exam)
+                .filter(
+                    or_(
+                        Exam.job_status == "queued",
+                        and_(Exam.job_status == "running", Exam.job_heartbeat_at < cutoff),
+                    )
+                )
+                .order_by(Exam.created_at.asc())
+                .first()
+            )
+            if row is None:
+                return None
+            row.job_status = "running"
+            row.job_attempts = int(row.job_attempts or 0) + 1
+            row.job_heartbeat_at = now
+            return JobData(exam_id=row.exam_id, user_id=row.user_id,
+                           payload=dict(row.job_payload or {}), attempts=row.job_attempts)
+
+    def heartbeat_job(self, exam_id: str) -> None:
+        with get_db() as db:
+            row = db.query(Exam).filter(Exam.exam_id == exam_id).first()
+            if row is not None:
+                row.job_heartbeat_at = datetime.now(timezone.utc)
+
+    def finish_job(self, *, exam_id: str, ok: bool, error: Optional[str] = None) -> str:
+        with get_db() as db:
+            row = db.query(Exam).filter(Exam.exam_id == exam_id).first()
+            if row is None:
+                return "missing"
+            if ok:
+                row.job_status = "done"
+            else:
+                row.job_status = "failed" if int(row.job_attempts or 0) >= MAX_JOB_ATTEMPTS else "queued"
+            return row.job_status
 
     def increment_exam_diagnostic_answered(
         self,

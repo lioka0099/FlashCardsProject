@@ -43,7 +43,7 @@ class IngestionValidationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         payload = response.json()
         self.assertEqual(payload.get("error"), "unsupported_document_type")
-        self.assertIn("Supported types", payload.get("message", ""))
+        self.assertIn("Unsupported file type", payload.get("message", ""))
 
 
 if __name__ == "__main__":

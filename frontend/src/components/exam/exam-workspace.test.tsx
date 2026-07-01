@@ -9,6 +9,7 @@ const getSessionNextCardMock = vi.fn();
 const getPresentedHistoryMock = vi.fn();
 const submitCardReviewMock = vi.fn();
 const logSessionEventMock = vi.fn();
+const replaceMock = vi.fn();
 
 vi.mock("@/lib/api/client", () => ({
   getExamById: (...args: unknown[]) => getExamByIdMock(...args),
@@ -25,6 +26,10 @@ vi.mock("@/lib/api/client", () => ({
 
 vi.mock("@/components/exam/progress-panel", () => ({
   ProgressPanel: () => null,
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: replaceMock, push: vi.fn() }),
 }));
 
 vi.mock("@/components/exam/proofs-dialog", () => ({
@@ -76,6 +81,7 @@ function deferred<T>() {
 describe("ExamWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    replaceMock.mockReset();
     getPresentedHistoryMock.mockResolvedValue([]);
   });
 
@@ -246,5 +252,26 @@ describe("ExamWorkspace", () => {
 
     pendingNext.resolve(nextCardResponse(buildCard("c2", "Question 2")));
     await screen.findByText("Question 2");
+  });
+
+  it("redirects to creating-test when exam state is processing", async () => {
+    getExamByIdMock.mockResolvedValue({
+      exam_id: "exam-1",
+      user_id: "guest",
+      title: "Test Exam",
+      mode: "mastery",
+      state: "processing",
+      diagnostic_total: 0,
+      diagnostic_answered: 0,
+      diagnostic_started_at: null,
+      diagnostic_completed_at: null,
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+      info: {},
+    });
+
+    renderWorkspace();
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/exams/exam-1/creating"));
   });
 });

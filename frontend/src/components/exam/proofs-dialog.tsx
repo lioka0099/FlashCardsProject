@@ -134,9 +134,7 @@ export function ProofsDialog({
             <ul className="evidence__list">
               {card.proofs.map((proof, proofIndex) => {
                 const jumpUrl = buildSourceUrl(proof, card, userId);
-                const hasOffsets = hasExactOffsets(proof);
                 const pageLabel = proof.page !== null ? String(proof.page) : "Unavailable";
-                const spanLabel = hasOffsets ? `${proof.start}-${proof.end}` : "Unavailable";
                 const proofKey = `${proof.doc_id}:${proof.page ?? "na"}:${proof.start}:${proof.end}`;
                 const panelId = `proof-panel-${proofIndex}`;
                 const isOpenProof = openProofKeys.has(proofKey);
@@ -175,7 +173,7 @@ export function ProofsDialog({
                               {proof.text}
                             </blockquote>
                             <p className="evidence__meta">
-                              Page: {pageLabel} • Span: {spanLabel}
+                              Page: {pageLabel}
                             </p>
                             <a
                               className="evidence__jump"

@@ -44,8 +44,9 @@ describe("ProofsDialog", () => {
       screen.getByRole("dialog", { name: /evidence and source context/i }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /source 1/i }));
+    expect(screen.getByText("Page: 3")).toBeInTheDocument();
     expect(
-      screen.getByText("Page: 3 • Span: 12-46"),
+      screen.getByText("TCP guarantees in-order and reliable delivery."),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /open the source/i }),

@@ -1005,17 +1005,27 @@ def node_store_card(state: CardGenState) -> CardGenState:
         info=info,
     )
     
-    # Store proofs
+    # Store proofs. ponytail: reuse the `text` column for the clean LLM quote,
+    # overwriting the raw chunk copy (raw still lives in the vector store); add a
+    # dedicated `quote` column + migration only if raw display text is ever needed.
+    from app.services.qa import summarize_evidence
+
+    source_proofs = list(state["proofs"] or [])
+    quotes = summarize_evidence(
+        answer=state["answer"] or "",
+        proof_texts=[p.text or "" for p in source_proofs],
+        question=state["question"] or "",
+    )
     proofs_data = [
         {
             "doc_id": p.doc_id,
             "page": p.page,
             "start": p.start,
             "end": p.end,
-            "text": p.text or "",
+            "text": quotes[i] if i < len(quotes) else (p.text or ""),
             "score": float(p.score or 0.0),
         }
-        for p in (state["proofs"] or [])
+        for i, p in enumerate(source_proofs)
     ]
     store.db.replace_card_proofs(card_id=card_id, proofs=proofs_data)
     

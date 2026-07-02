@@ -3,7 +3,7 @@ from typing import List, Sequence, Optional
 import json
 import re
 import numpy as np
-from app.services.llm import CHAT_MODEL, chat_completions_create, embed_texts
+from app.services.llm import CHAT_MODEL, CHAT_MODEL_FAST, chat_completions_create, embed_texts
 from app.services.retrieval import retrieve_with_proofs
 from app.data.vector_store import VectorStore
 from app.api.schemas import ProofSpan
@@ -43,6 +43,103 @@ def _clean_text(text: str) -> str:
 
 def _split_sentences(text: str) -> List[str]:
     return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+
+_BULLET_RE = re.compile(r"[▪•●■◦‣·]+")
+
+_VERBATIM_SYS_PROMPT = (
+    "You extract a citation for a flashcard app. From PASSAGE, copy the exact "
+    "sentence or contiguous span that best supports the ANSWER. Copy it "
+    "word-for-word in the original order — do NOT paraphrase, summarize, reorder, "
+    "or add words. You may drop bullet characters. Keep it to one sentence if "
+    "possible.\n"
+    'Respond as JSON: {"quote": "<verbatim text from the passage>"}.'
+)
+
+
+def _match_key(text: str) -> str:
+    """Lowercase word sequence, punctuation/bullets stripped, for substring checks."""
+    return " ".join(re.findall(r"[a-z0-9]+", (text or "").lower()))
+
+
+def _display_clean(text: str) -> str:
+    """Verbatim words, bullet glyphs dropped and whitespace collapsed."""
+    return _clean_text(_BULLET_RE.sub(" ", text or ""))
+
+
+def _fallback_verbatim(proof_text: str, query: str) -> str:
+    """Deterministically pick the passage segment with the most query-word overlap."""
+    segments = [
+        _display_clean(seg)
+        for seg in re.split(r"(?<=[.!?])\s+|[▪•●■◦‣]", proof_text or "")
+    ]
+    segments = [s for s in segments if s]
+    if not segments:
+        return _display_clean(proof_text)
+    query_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
+
+    def score(segment: str) -> int:
+        tokens = re.findall(r"[a-z0-9]+", segment.lower())
+        return sum(1 for token in tokens if token in query_tokens)
+
+    best = max(range(len(segments)), key=lambda i: (score(segments[i]), -i))
+    return segments[best]
+
+
+def _verbatim_quote_one(
+    answer: str,
+    question: str,
+    proof_text: str,
+    model: str,
+) -> str:
+    """
+    A verbatim citation for one proof: the LLM copies the supporting span, then we
+    verify its words actually appear (in order) in the passage before trusting it.
+    On paraphrase/hallucination/failure, fall back to a deterministic verbatim
+    segment so the shown text is always findable in the source.
+    """
+    if not _display_clean(proof_text):
+        return ""
+    query = f"{answer} {question}"
+    user_prompt = (
+        f"ANSWER:\n{answer}\n\nQUESTION:\n{question}\n\nPASSAGE:\n{proof_text}"
+    )
+    try:
+        resp = chat_completions_create(
+            model=model,
+            messages=[
+                {"role": "system", "content": _VERBATIM_SYS_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0,
+            max_tokens=200,
+            response_format={"type": "json_object"},
+        )
+        candidate = str(json.loads(resp.choices[0].message.content or "").get("quote", "")).strip()
+        candidate_key = _match_key(candidate)
+        if candidate_key and candidate_key in _match_key(proof_text):
+            return _display_clean(candidate)
+    except Exception:
+        pass
+    return _fallback_verbatim(proof_text, query)
+
+
+def summarize_evidence(
+    answer: str,
+    proof_texts: List[str],
+    question: str = "",
+    model: str = CHAT_MODEL_FAST,
+) -> List[str]:
+    """
+    Extract a short verbatim citation from each proof chunk — text that actually
+    appears in the source (so the user can find it), with bullet glyphs and stray
+    whitespace tidied. One LLM call per proof, each verified to be a real substring
+    of its passage; deterministic fallback keeps the result verbatim on any failure.
+    """
+    return [
+        _verbatim_quote_one(answer, question, text, model)
+        for text in proof_texts
+    ]
+
 
 def _condense_proof_text(
     proof: ProofSpan,

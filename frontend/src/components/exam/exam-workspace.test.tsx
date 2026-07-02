@@ -187,19 +187,19 @@ describe("ExamWorkspace", () => {
     renderWorkspace();
 
     await screen.findByText("Question 1");
-    fireEvent.click(screen.getByRole("button", { name: /Nailed it/i }));
+    fireEvent.click(screen.getByRole("button", { name: /I knew it/i }));
     await waitFor(() => expect(submitCardReviewMock).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Next card" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Next" })[0]);
     await screen.findByText("Question 2");
 
     fireEvent.click(screen.getAllByRole("button", { name: "Previous" })[0]);
     await screen.findByText("Question 1");
 
-    expect(screen.getByRole("button", { name: /Nailed it/i })).toBeDisabled();
-    expect(screen.queryByRole("button", { name: /Nearly there/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /I knew it/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /Almost knew it/i })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Next card" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Next" })[0]);
     await screen.findByText("Question 2");
     expect(getSessionNextCardMock).toHaveBeenCalledTimes(2);
   });
@@ -241,10 +241,10 @@ describe("ExamWorkspace", () => {
     renderWorkspace();
 
     await screen.findByText("Question 1");
-    fireEvent.click(screen.getByRole("button", { name: /Nailed it/i }));
+    fireEvent.click(screen.getByRole("button", { name: /I knew it/i }));
     await waitFor(() => expect(submitCardReviewMock).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Next card" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Next" })[0]);
 
     expect(screen.getByText("Question 1")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Preparing..." })).toBeDisabled();

@@ -13,7 +13,7 @@ function renderPanel() {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <ProgressPanel examId="exam-1" userId="guest" isOpen />
+      <ProgressPanel examId="exam-1" userId="guest" />
     </QueryClientProvider>,
   );
 }
@@ -38,10 +38,10 @@ describe("ProgressPanel", () => {
     renderPanel();
 
     await waitFor(() => {
-      expect(screen.getByText("Overall mastery")).toBeInTheDocument();
+      expect(screen.getByText("Your Progress")).toBeInTheDocument();
       expect(screen.getByText("63%")).toBeInTheDocument();
       expect(screen.getByText("Transport Layer")).toBeInTheDocument();
-      expect(screen.getByText("4 reviews")).toBeInTheDocument();
+      expect(screen.getByText("70%")).toBeInTheDocument();
     });
   });
 

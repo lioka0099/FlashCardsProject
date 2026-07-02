@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { motion, useAnimationControls } from "framer-motion";
+import { ArrowLeft, ArrowRight, Brain, Quote, RotateCcw, Sparkles } from "lucide-react";
 import type { Card } from "@/lib/api/client";
-import { IdeaIcon } from "@/components/icons/idea-icon";
 import { RatingControls } from "@/components/exam/rating-controls";
 import type { ReviewRating } from "@/lib/api/client";
+import "./study.css";
 
 type FlashcardPlayerProps = {
   card: Card | null;
@@ -40,7 +41,6 @@ export function FlashcardPlayer({
   onLoadNext,
   isPreviousEnabled,
 }: FlashcardPlayerProps) {
-  const [isProofsHover, setIsProofsHover] = useState(false);
   const [displayedAnswerVisible, setDisplayedAnswerVisible] = useState(isAnswerVisible);
   const cardControls = useAnimationControls();
 
@@ -84,208 +84,172 @@ export function FlashcardPlayer({
   if (!card) {
     return (
       <motion.section
-        className="flashcard-player flashcard-player--empty"
+        className="stage stage--empty"
         aria-live="polite"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: "easeOut" }}
       >
-        <h1 className="flashcard-player__empty-title">No cards on stage yet</h1>
-        <p className="flashcard-player__hint">
+        <h1 className="stage__empty-title">No cards on stage yet</h1>
+        <p className="stage__status">
           {statusMessage ?? "This deck is still warming up its vocabulary."}
         </p>
-        <div className="flashcard-player__nav">
-          <button
-            className="flashcard-player__nav-button"
-            type="button"
-            onClick={onLoadPrevious}
-            disabled={!isPreviousEnabled}
-          >
-            Previous
-          </button>
-          <button
-            className="flashcard-player__nav-button flashcard-player__nav-button--primary"
-            type="button"
-            onClick={onLoadNext}
-            disabled={isPreparingNextCard}
-          >
-            {isPreparingNextCard ? "Preparing a clever card..." : "Next card"}
-          </button>
-        </div>
+        <button
+          className="card__flip"
+          type="button"
+          onClick={onLoadNext}
+          disabled={isPreparingNextCard}
+        >
+          {isPreparingNextCard ? "Preparing a clever card..." : "Next card"}
+        </button>
       </motion.section>
     );
   }
 
-  const cardType =
-    typeof card.info?.card_type === "string" ? card.info.card_type : null;
-  const difficultyLabel =
-    cardType === "diagnostic"
-      ? "Calibrating your brilliance"
-      : `Difficulty ${card.difficulty}`;
+  const cardType = typeof card.info?.card_type === "string" ? card.info.card_type : null;
+  const isDiagnostic = cardType === "diagnostic";
+  const pillLabel = cardType ? cardType.charAt(0).toUpperCase() + cardType.slice(1) : "Concept";
 
   return (
     <motion.section
-      className="flashcard-player"
+      className="stage"
       aria-label="Flashcard player"
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.38, ease: "easeOut" }}
     >
-      <div className="flashcard-player__meta-row">
-        <span className="flashcard-player__badge flashcard-player__badge--topic">
-          Topic: {card.topic_label ?? "General topic"}
-        </span>
-        <span className="flashcard-player__badge flashcard-player__badge--difficulty">
-          {difficultyLabel}
-        </span>
-      </div>
-
-      <div className="flashcard-player__flip-shell">
-        <motion.div
-          className="flashcard-player__flip-card"
-          role="button"
-          tabIndex={0}
-          onClick={(event) => {
-            if (
-              (event.target as HTMLElement).closest("[data-no-flip='true']")
-            ) {
-              return;
-            }
-            onToggleAnswer();
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              onToggleAnswer();
-            }
-          }}
-          aria-label={
-            isAnswerVisible ? "Show question side" : "Show answer side"
-          }
+      <div className="stage__cardrow">
+        <button
+          className="stage__arrow stage__arrow--prev"
+          type="button"
+          onClick={onLoadPrevious}
+          disabled={!isPreviousEnabled}
         >
+          <span className="stage__arrow-icon"><ArrowLeft size={20} /></span>
+          Previous
+        </button>
+
+        <div className="card-shell">
           <motion.article
             animate={cardControls}
-            className={`flashcard-player__face ${
-              displayedAnswerVisible
-                ? "flashcard-player__face--back"
-                : "flashcard-player__face--front"
-            }`}
+            className={`card-face${displayedAnswerVisible ? " card-face--back" : " card-face--front"}`}
+            role="button"
+            tabIndex={0}
             initial={false}
             style={{
               backfaceVisibility: "hidden",
               transformOrigin: "center center",
               transformPerspective: 1200,
             }}
+            onClick={(event) => {
+              if ((event.target as HTMLElement).closest("[data-no-flip='true']")) {
+                return;
+              }
+              onToggleAnswer();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onToggleAnswer();
+              }
+            }}
+            aria-label={isAnswerVisible ? "Show question side" : "Show answer side"}
           >
             {!displayedAnswerVisible ? (
               <>
-                <span className="flashcard-player__face-label">Question</span>
-                <div className="flashcard-player__front-content">
-                  <p className="flashcard-player__content flashcard-player__content--question">
-                    {card.question}
-                  </p>
+                <div className="card__meta">
+                  <span className="card__pill"><Brain size={16} aria-hidden="true" /> {pillLabel}</span>
+                  {!isDiagnostic ? (
+                    <span className="card__pill card__pill--difficulty">Difficulty {card.difficulty}</span>
+                  ) : null}
                 </div>
-                <p className="flashcard-player__face-hint">Tap to reveal the plot twist</p>
+                {card.topic_label ? <p className="card__topic">{card.topic_label}</p> : null}
+                <p className="card__q">{card.question}</p>
+                <hr className="card__divider" />
+                <p className="card__hint">
+                  <Sparkles size={18} aria-hidden="true" /> Try to answer before flipping the card
+                </p>
+                <button
+                  className="card__flip"
+                  type="button"
+                  data-no-flip="true"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onToggleAnswer();
+                  }}
+                >
+                  <RotateCcw size={18} aria-hidden="true" /> Flip Card
+                </button>
               </>
             ) : (
               <>
-                <span className="flashcard-player__face-label">Answer</span>
-                <div className="flashcard-player__back-content">
-                  <p className="flashcard-player__content">{card.answer}</p>
+                <div className="card__meta">
+                  <span className="card__pill"><Brain size={16} aria-hidden="true" /> Answer</span>
+                  {!isDiagnostic ? (
+                    <span className="card__pill card__pill--difficulty">Difficulty {card.difficulty}</span>
+                  ) : null}
                 </div>
-                <div className="flashcard-player__back-footer">
-                  <motion.button
-                    className="flashcard-player__proofs-button flex items-center gap-2"
-                    type="button"
-                    data-no-flip="true"
-                    onHoverStart={() => setIsProofsHover(true)}
-                    onHoverEnd={() => setIsProofsHover(false)}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onShowProofs(card);
-                    }}
-                  >
-                    <motion.span
-                      className="inline-flex h-10 w-10 items-center justify-center"
-                      animate={
-                        isProofsHover
-                          ? {
-                              scale: [1, 1.08, 1],
-                              filter: [
-                                "drop-shadow(0 0 0 rgba(245, 197, 66, 0))",
-                                "drop-shadow(0 0 8px rgba(245, 197, 66, 0.72))",
-                                "drop-shadow(0 0 4px rgba(245, 197, 66, 0.4))",
-                              ],
-                            }
-                          : {
-                              scale: 1,
-                              filter: "drop-shadow(0 0 0 rgba(245, 197, 66, 0))",
-                            }
-                      }
-                      transition={{
-                        duration: 1.05,
-                        ease: "easeInOut",
-                        repeat: isProofsHover ? Number.POSITIVE_INFINITY : 0,
-                      }}
-                    >
-                      <IdeaIcon className="h-10 w-10" />
-                    </motion.span>
-                    Show receipts
-                  </motion.button>
-                  <p className="flashcard-player__face-hint flashcard-player__face-hint--back">
-                    Back to the question
-                  </p>
-                  <span
-                    className="flashcard-player__back-footer-spacer"
-                    aria-hidden="true"
-                  />
-                </div>
+                {card.topic_label ? <p className="card__topic">{card.topic_label}</p> : null}
+                <div className="card__a">{card.answer}</div>
+                <hr className="card__divider" />
+                <button
+                  className="card__receipts"
+                  type="button"
+                  data-no-flip="true"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onShowProofs(card);
+                  }}
+                >
+                  <Quote size={18} aria-hidden="true" /> Show evidence
+                </button>
+                <button
+                  className="card__flip"
+                  type="button"
+                  data-no-flip="true"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onToggleAnswer();
+                  }}
+                >
+                  <RotateCcw size={18} aria-hidden="true" /> Back to the question
+                </button>
               </>
             )}
           </motion.article>
-        </motion.div>
+        </div>
+
+        <button
+          className="stage__arrow stage__arrow--next"
+          type="button"
+          onClick={onLoadNext}
+          disabled={!isNextEnabled || isRatingPending || isPreparingNextCard}
+        >
+          <span className="stage__arrow-icon"><ArrowRight size={20} /></span>
+          {isPreparingNextCard ? "Preparing..." : "Next"}
+        </button>
       </div>
 
       {canRateCurrentCard || selectedRating ? (
         <RatingControls
           canRateCurrentCard={canRateCurrentCard}
           selectedRating={selectedRating}
-          isPending={isRatingPending}
+          isPending={isRatingPending || isPreparingNextCard}
           onRate={onRate}
         />
       ) : null}
       {!canRateCurrentCard && !selectedRating ? (
-        <p className="flashcard-player__readonly">
+        <p className="stage__readonly">
           This read-only card is a museum piece today, so ratings are closed.
         </p>
       ) : null}
-      {statusMessage ? (
-        <p className="flashcard-player__hint">{statusMessage}</p>
-      ) : null}
+
+      {statusMessage ? <p className="stage__status">{statusMessage}</p> : null}
       {isPreparingNextCard ? (
-        <p className="flashcard-player__hint" aria-live="polite">
+        <p className="stage__status" aria-live="polite">
           Preparing a card that matches your current level. Tiny academic chef is plating.
         </p>
       ) : null}
-
-      <footer className="flashcard-player__nav">
-        <button
-          className="flashcard-player__nav-button"
-          type="button"
-          onClick={onLoadPrevious}
-          disabled={!isPreviousEnabled}
-        >
-          Previous
-        </button>
-        <button
-          className="flashcard-player__nav-button flashcard-player__nav-button--primary"
-          type="button"
-          onClick={onLoadNext}
-          disabled={!isNextEnabled || isRatingPending || isPreparingNextCard}
-        >
-          {isPreparingNextCard ? "Preparing..." : "Next card"}
-        </button>
-      </footer>
     </motion.section>
   );
 }

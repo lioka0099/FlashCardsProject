@@ -1,7 +1,8 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { PanelRight } from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronRight, History } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getExamProgress } from "@/lib/api/client";
 import { mapApiError } from "@/lib/api/ui-error";
@@ -10,129 +11,121 @@ import { InlineError } from "@/components/common/inline-error";
 type ProgressPanelProps = {
   examId: string;
   userId: string;
-  isOpen: boolean;
-  onToggle?: () => void;
 };
 
-function toPercent(value: number | null) {
-  if (value === null || Number.isNaN(value)) {
-    return "0%";
-  }
-  return `${Math.round(value * 100)}%`;
-}
+// Cycled per-topic accent colors (matches the mockup's colored dots + bars).
+const TOPIC_COLORS = ["#6f42c1", "#2db7c5", "#22c55e", "#f59e0b", "#ef4444", "#a78bfa"];
 
-function toNumericPercent(value: number | null) {
+function toPercent(value: number | null) {
   if (value === null || Number.isNaN(value)) {
     return 0;
   }
   return Math.max(0, Math.min(100, Math.round(value * 100)));
 }
 
-export function ProgressPanel({ examId, userId, isOpen, onToggle }: ProgressPanelProps) {
+export function ProgressPanel({ examId, userId }: ProgressPanelProps) {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["exam-progress", examId, userId],
     queryFn: () => getExamProgress(examId, userId),
     retry: 1,
   });
   const progressError = isError ? mapApiError(error, "exam.progress.load") : null;
+  const overall = toPercent(data?.overall_proficiency ?? null);
+
+  // Scroll-affordance fades: show a top fade once scrolled down and a bottom
+  // fade while there's more list below, so it's obvious the topics scroll.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [fade, setFade] = useState({ top: false, bottom: false });
+  const topicCount = data?.topics.length ?? 0;
+
+  const updateFades = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const overflow = el.scrollHeight - el.clientHeight;
+    setFade({
+      top: overflow > 1 && el.scrollTop > 1,
+      bottom: overflow > 1 && el.scrollTop < overflow - 1,
+    });
+  }, []);
+
+  useEffect(() => {
+    updateFades();
+    window.addEventListener("resize", updateFades);
+    return () => window.removeEventListener("resize", updateFades);
+  }, [updateFades, topicCount]);
 
   return (
-    <aside
-      className={`progress-panel${isOpen ? " progress-panel--open" : ""}`}
-      aria-label="Study progress"
-    >
-      {!isOpen ? (
-        <button
-          className="progress-panel__toggle"
-          type="button"
-          onClick={onToggle}
-          aria-label="Show progress panel"
-          title="Show progress panel"
-        >
-          <PanelRight className="progress-panel__toggle-icon" size={18} aria-hidden="true" />
-        </button>
-      ) : null}
+    <aside className="side" aria-label="Study progress">
+      <div className="side__panel">
+        <h2 className="side__title">Your Progress</h2>
 
-      {isOpen ? (
-        <div className="progress-panel__content">
-          <div className="progress-panel__header">
-            <h2 className="progress-panel__title">Mastery Meter</h2>
-            <button
-              className="progress-panel__toggle"
-              type="button"
-              onClick={onToggle}
-              aria-label="Hide progress panel"
-              title="Hide progress panel"
-            >
-              <PanelRight className="progress-panel__toggle-icon progress-panel__toggle-icon--open" size={18} aria-hidden="true" />
-            </button>
-          </div>
+        {isLoading ? <p className="side__hint">Measuring your intellectual sparkle...</p> : null}
 
-          {isLoading ? <p className="progress-panel__hint">Measuring your intellectual sparkle...</p> : null}
+        {progressError ? (
+          <InlineError
+            message={progressError.message}
+            onRetry={progressError.canRetry ? () => void refetch() : undefined}
+            messageClassName="side__error"
+            retryClassName="study__retry"
+          />
+        ) : null}
 
-          {progressError ? (
-            <div>
-              <InlineError
-                message={progressError.message}
-                onRetry={progressError.canRetry ? () => void refetch() : undefined}
-                messageClassName="progress-panel__error"
-                retryClassName="progress-panel__retry"
-              />
-            </div>
-          ) : null}
-
-          {!isLoading && !isError ? (
-            <div className="progress-panel__summary progress-panel__summary--magic">
-              <div>
-                <span className="progress-panel__label">Overall mastery</span>
-                <span className="progress-panel__value">{toPercent(data?.overall_proficiency ?? null)}</span>
+        {!isLoading && !isError ? (
+          <>
+            <div className="side__ring-wrap">
+              <div className="ring" style={{ ["--pct" as string]: overall }} aria-hidden="true">
+                <span className="ring__label">
+                  <span className="ring__pct">{overall}%</span>
+                  <span className="ring__cap">Overall</span>
+                </span>
               </div>
-              <span className="progress-panel__sparkles" aria-hidden="true">
-                ✦
-              </span>
             </div>
-          ) : null}
 
-          {!isLoading && !isError && (data?.topics.length ?? 0) === 0 ? (
-            <p className="progress-panel__hint">No topic progress yet. Rate a few cards and the meter will wake up.</p>
-          ) : null}
+            {(data?.topics.length ?? 0) === 0 ? (
+              <p className="side__hint">No topic progress yet. Rate a few cards and the meter will wake up.</p>
+            ) : (
+              <>
+                <h3 className="side__subtitle">By Topic</h3>
+                <div
+                  className="side__scroll-wrap"
+                  data-fade-top={fade.top ? "true" : "false"}
+                  data-fade-bottom={fade.bottom ? "true" : "false"}
+                >
+                  <div className="side__scroll" ref={scrollRef} onScroll={updateFades}>
+                    <ul className="side__topics">
+                      {data?.topics.map((topic, index) => {
+                        const pct = toPercent(topic.proficiency);
+                        const color = TOPIC_COLORS[index % TOPIC_COLORS.length];
+                        return (
+                          <li key={topic.topic_id} style={{ ["--c" as string]: color }}>
+                            <div className="topic__head">
+                              <span className="topic__dot" aria-hidden="true" />
+                              <span className="topic__name">{topic.topic_label}</span>
+                              <span className="topic__pct">{pct}%</span>
+                            </div>
+                            <div className="topic__track" aria-hidden="true">
+                              <span className="topic__fill" style={{ width: `${pct}%` }} />
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        ) : null}
 
-          {!isLoading && !isError && (data?.topics.length ?? 0) > 0 ? (
-            <ul className="progress-panel__list">
-              {data?.topics.map((topic) => (
-                <li key={topic.topic_id} className="progress-panel__item">
-                  <div className="progress-panel__item-head">
-                    <p className="progress-panel__topic">{topic.topic_label}</p>
-                    <p className="progress-panel__meta">{topic.n_reviews ?? 0} reviews</p>
-                  </div>
-                  <div className="progress-panel__magic-track" aria-hidden="true">
-                    <motion.span
-                      className="progress-panel__magic-fill"
-                      initial={{ width: "0%" }}
-                      animate={{ width: `${toNumericPercent(topic.proficiency)}%` }}
-                      transition={{ duration: 0.6, ease: "easeOut" }}
-                    />
-                    <motion.span
-                      className="progress-panel__magic-spark"
-                      initial={{ x: 0 }}
-                      animate={{ x: `${toNumericPercent(topic.proficiency)}%` }}
-                      transition={{
-                        duration: 2,
-                        repeat: Number.POSITIVE_INFINITY,
-                        repeatType: "reverse",
-                        ease: "easeInOut",
-                      }}
-                    >
-                      ✦
-                    </motion.span>
-                  </div>
-                  <span className="progress-panel__score">{toPercent(topic.proficiency)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
+        <Link className="side__history" href={`/exams/${examId}/history`}>
+          <History size={18} aria-hidden="true" />
+          <span>
+            View History
+            <span className="side__history-sub">See all studied cards</span>
+          </span>
+          <ChevronRight className="side__history-chev" size={18} aria-hidden="true" />
+        </Link>
+      </div>
     </aside>
   );
 }

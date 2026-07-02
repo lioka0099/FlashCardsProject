@@ -13,10 +13,10 @@ describe("RatingControls", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /Nailed it/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Nearly there/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /I knew it/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Almost knew it/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Just learned it/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Still mysterious/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Didn't get it/i })).toBeInTheDocument();
   });
 
   it("calls onRate with the selected rating", () => {
@@ -30,7 +30,7 @@ describe("RatingControls", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Nearly there/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Almost knew it/i }));
     expect(onRate).toHaveBeenCalledWith("almost_knew");
   });
 
@@ -57,6 +57,6 @@ describe("RatingControls", () => {
       />,
     );
     expect(screen.getByRole("button", { name: /Just learned it/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Nailed it/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /I knew it/i })).not.toBeInTheDocument();
   });
 });

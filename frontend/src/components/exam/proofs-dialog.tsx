@@ -20,22 +20,6 @@ function hasExactOffsets(proof: ProofSpan) {
   );
 }
 
-function formatSourceLabel(docId: string): string {
-  if (!docId) {
-    return "Unknown";
-  }
-  if (/^https?:\/\//i.test(docId)) {
-    try {
-      const parsed = new URL(docId);
-      const lastSegment = parsed.pathname.split("/").filter(Boolean).at(-1);
-      return lastSegment || parsed.hostname;
-    } catch {
-      return docId;
-    }
-  }
-  return docId;
-}
-
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
 
@@ -110,7 +94,7 @@ export function ProofsDialog({
 
   return (
     <motion.div
-      className="proofs-dialog__backdrop"
+      className="evidence-backdrop"
       role="presentation"
       onClick={closeDialog}
       initial={{ opacity: 0 }}
@@ -118,7 +102,7 @@ export function ProofsDialog({
       transition={{ duration: 0.18, ease: "easeOut" }}
     >
       <motion.section
-        className="proofs-dialog"
+        className="evidence"
         role="dialog"
         aria-modal="true"
         aria-label="Evidence and source context"
@@ -127,13 +111,13 @@ export function ProofsDialog({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.24, ease: "easeOut" }}
       >
-        <header className="proofs-dialog__header">
+        <header className="evidence__header">
           <div>
-            <h2 className="proofs-dialog__title">Receipts, elegantly filed</h2>
-            <p className="proofs-dialog__subtitle">{card.question}</p>
+            <h2 className="evidence__title">Supporting evidence</h2>
+            <p className="evidence__question">{card.question}</p>
           </div>
           <button
-            className="proofs-dialog__close"
+            className="evidence__close"
             type="button"
             onClick={closeDialog}
           >
@@ -141,38 +125,37 @@ export function ProofsDialog({
           </button>
         </header>
 
-        <div className="proofs-dialog__content">
+        <div className="evidence__content">
           {card.proofs.length === 0 ? (
-            <p className="proofs-dialog__empty">
-              No receipts for this card yet. It remains charmingly undocumented.
+            <p className="evidence__empty">
+              No supporting evidence was found for this card.
             </p>
           ) : (
-            <ul className="proofs-dialog__list">
+            <ul className="evidence__list">
               {card.proofs.map((proof, proofIndex) => {
                 const jumpUrl = buildSourceUrl(proof, card, userId);
                 const hasOffsets = hasExactOffsets(proof);
-                const sourceLabel = formatSourceLabel(proof.doc_id);
                 const pageLabel = proof.page !== null ? String(proof.page) : "Unavailable";
                 const spanLabel = hasOffsets ? `${proof.start}-${proof.end}` : "Unavailable";
                 const proofKey = `${proof.doc_id}:${proof.page ?? "na"}:${proof.start}:${proof.end}`;
                 const panelId = `proof-panel-${proofIndex}`;
                 const isOpenProof = openProofKeys.has(proofKey);
                 return (
-                  <li key={proofKey} className="proofs-dialog__item">
+                  <li key={proofKey} className="evidence__item">
                     <button
                       type="button"
-                      className="proofs-dialog__trigger"
+                      className="evidence__trigger"
                       aria-expanded={isOpenProof}
                       aria-controls={panelId}
                       onClick={() => toggleProof(proofKey)}
                     >
-                      <span className="proofs-dialog__trigger-title">
-                        Receipt {proofIndex + 1} - {sourceLabel}
+                      <span className="evidence__trigger-title">
+                        Source {proofIndex + 1}
                       </span>
                       <ChevronDown
                         size={16}
-                        className={`proofs-dialog__trigger-chevron${
-                          isOpenProof ? " proofs-dialog__trigger-chevron--open" : ""
+                        className={`evidence__chevron${
+                          isOpenProof ? " evidence__chevron--open" : ""
                         }`}
                         aria-hidden="true"
                       />
@@ -181,21 +164,21 @@ export function ProofsDialog({
                       {isOpenProof ? (
                         <motion.div
                           id={panelId}
-                          className="proofs-dialog__panel"
+                          className="evidence__panel"
                           initial={{ height: 0, opacity: 0 }}
                           animate={{ height: "auto", opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
                           transition={{ duration: 0.2, ease: "easeInOut" }}
                         >
-                          <div className="proofs-dialog__panel-inner">
-                            <blockquote className="proofs-dialog__quote">
+                          <div className="evidence__panel-inner">
+                            <blockquote className="evidence__quote">
                               {proof.text}
                             </blockquote>
-                            <p className="proofs-dialog__meta-inline">
-                              Source: {sourceLabel} • Page: {pageLabel} • Span: {spanLabel}
+                            <p className="evidence__meta">
+                              Page: {pageLabel} • Span: {spanLabel}
                             </p>
                             <a
-                              className="proofs-dialog__jump"
+                              className="evidence__jump"
                               href={jumpUrl}
                               target="_blank"
                               rel="noreferrer"

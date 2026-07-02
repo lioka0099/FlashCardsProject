@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { Home } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   assertActiveRateableCard,
@@ -39,7 +40,6 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
   const queryClient = useQueryClient();
   const router = useRouter();
   const { userId } = useGuestSession();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isAnswerVisible, setIsAnswerVisible] = useState(false);
   const [historyCards, setHistoryCards] = useState<Card[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -232,50 +232,50 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
     ? mapApiError(examQuery.error, "exam.workspace.load_exam")
     : null;
 
+  const cardCountRaw = (examQuery.data?.info as Record<string, unknown> | undefined)?.card_count;
+  const cardCount = typeof cardCountRaw === "number" ? cardCountRaw : null;
+
   return (
     <motion.div
-      className={`exam-workspace${isSidebarOpen ? " exam-workspace--sidebar-open" : ""}`}
+      className="study"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
     >
-      <motion.main
-        className="exam-workspace__main"
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: "easeOut" }}
-      >
-        <div className="exam-workspace__header">
-          <div className="exam-workspace__header-main">
-            <h1 className="exam-workspace__title">
-              {examQuery.data?.title ?? (examQuery.isLoading ? "Preparing your deck..." : "Study deck")}
-            </h1>
-          </div>
-          <div className="exam-workspace__header-actions">
-            <Link className="exam-workspace__history-link" href={`/exams/${examId}/history`}>
-              Review the trail
-            </Link>
-          </div>
+      <header className="study__topbar">
+        <Link className="study__back" href="/">
+          <Home size={18} aria-hidden="true" />
+          Back to Home
+        </Link>
+        <div className="study__deck">
+          <h1 className="study__deck-title">
+            {examQuery.data?.title ?? (examQuery.isLoading ? "Preparing your deck..." : "Study deck")}
+          </h1>
+          {cardCount !== null ? <p className="study__deck-sub">{cardCount} cards</p> : null}
         </div>
+      </header>
 
+      <div className="study__body">
         {examLoadError ? (
-          <section className="exam-workspace__error">
+          <section className="study__banner">
             <InlineError
               message={examLoadError.message}
               onRetry={examLoadError.canRetry ? () => void examQuery.refetch() : undefined}
               messageClassName=""
-              retryClassName="exam-workspace__retry"
+              retryClassName="study__retry"
             />
           </section>
         ) : null}
 
+        <ProgressPanel examId={examId} userId={userId} />
+
         {sessionLoadError ? (
-          <section className="exam-workspace__error">
+          <section className="study__banner">
             <InlineError
               message={sessionLoadError.message}
               onRetry={sessionLoadError.canRetry ? () => void sessionQuery.refetch() : undefined}
               messageClassName=""
-              retryClassName="exam-workspace__retry"
+              retryClassName="study__retry"
             />
           </section>
         ) : (
@@ -296,20 +296,13 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
             isPreviousEnabled={isPreviousEnabled}
           />
         )}
-      </motion.main>
+      </div>
 
       <ProofsDialog
         isOpen={Boolean(proofsCard)}
         card={proofsCard}
         userId={userId}
         onClose={() => setProofsCard(null)}
-      />
-
-      <ProgressPanel
-        examId={examId}
-        userId={userId}
-        isOpen={isSidebarOpen}
-        onToggle={() => setIsSidebarOpen((previous) => !previous)}
       />
     </motion.div>
   );

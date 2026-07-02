@@ -21,7 +21,7 @@ function buildCard(overrides?: Partial<Card>): Card {
 }
 
 describe("FlashcardPlayer", () => {
-  it("shows question side first with topic and difficulty badges", () => {
+  it("shows question side first with the type pill and flip hint", () => {
     render(
       <FlashcardPlayer
         card={buildCard()}
@@ -41,11 +41,11 @@ describe("FlashcardPlayer", () => {
       />,
     );
 
-    expect(screen.getByText("Question")).toBeInTheDocument();
     expect(screen.getByText("What does TCP guarantee?")).toBeInTheDocument();
-    expect(screen.getByText("Tap to reveal the plot twist")).toBeInTheDocument();
-    expect(screen.getByText("Topic: Networks")).toBeInTheDocument();
+    expect(screen.getByText("Try to answer before flipping the card")).toBeInTheDocument();
+    expect(screen.getByText("Networks")).toBeInTheDocument();
     expect(screen.getByText("Difficulty 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Flip Card/i })).toBeInTheDocument();
   });
 
   it("shows answer and proofs action when flipped", async () => {
@@ -71,7 +71,7 @@ describe("FlashcardPlayer", () => {
     expect(screen.getByText("Answer")).toBeInTheDocument();
     expect(screen.getByText("Reliable ordered delivery.")).toBeInTheDocument();
     expect(screen.getByText("Back to the question")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Show receipts" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show evidence" })).toBeInTheDocument();
   });
 
   it("opens proofs without flipping when tapping view proofs", () => {
@@ -97,7 +97,7 @@ describe("FlashcardPlayer", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Show receipts" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show evidence" }));
     expect(onShowProofs).toHaveBeenCalledWith(card);
     expect(onToggleAnswer).not.toHaveBeenCalled();
   });
@@ -146,11 +146,11 @@ describe("FlashcardPlayer", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Nailed it/i }));
+    fireEvent.click(screen.getByRole("button", { name: /I knew it/i }));
     expect(onRate).toHaveBeenCalledWith("i_knew_it");
   });
 
-  it("shows diagnostic-friendly difficulty text for diagnostic cards", () => {
+  it("shows the card type in the pill for diagnostic cards", () => {
     render(
       <FlashcardPlayer
         card={buildCard({ info: { card_type: "diagnostic" } })}
@@ -170,7 +170,7 @@ describe("FlashcardPlayer", () => {
       />,
     );
 
-    expect(screen.getByText("Calibrating your brilliance")).toBeInTheDocument();
+    expect(screen.getByText("Diagnostic")).toBeInTheDocument();
   });
 
   it("shows next-card preparation feedback while pending", () => {

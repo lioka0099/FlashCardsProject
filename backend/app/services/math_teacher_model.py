@@ -110,6 +110,8 @@ class MathTeacherModelService:
             "- Follow the verified step plan in order; explain each step clearly.\n"
             "- The final answer MUST equal the canonical final answer exactly.\n"
             "- Keep the solution flashcard-friendly, not a long lecture.\n"
+            "- In the `answer` and `solution_steps` text (what the student reads), format all math with "
+            "inline LaTeX \\( ... \\) — e.g. \\(f'(x) = 3x^2 - 6x\\) — never bare ASCII like x^2.\n"
             "- Use SymPy-compatible syntax for final_answer and verification_target fields where possible.\n\n"
             "Return JSON with this schema:\n"
             "{\n"

@@ -132,14 +132,17 @@ class MathStudentModelService:
             "- Mark the step that produces the final result with `is_final: true`.\n"
             "- The final step's `check` MUST be self-contained: inline the numeric results of earlier steps "
             "(e.g. write `91/6 - (7/2)**2`, NOT `EX2 - EX**2`) so it evaluates on its own.\n"
-            "- Use Python/SymPy syntax: ** for powers, * for multiplication, sqrt(x) for roots. No LaTeX.\n"
+            "- In `check` expressions and `final_answer`, use Python/SymPy syntax "
+            "(** for powers, * for multiplication, sqrt(x) for roots); NO LaTeX in those machine-verified fields.\n"
+            "- In `problem_statement` (the text the student reads), format all math with inline "
+            "LaTeX \\( ... \\) — e.g. \\(f(x) = x^3 - 3x^2 + 4\\) — never bare ASCII like x^3.\n"
             "- Keep numbers small and clean; depth must come from the mathematics, not arithmetic size.\n"
             "- Return status='insufficient_evidence' with a reason if the document does not support a grounded problem.\n\n"
             "Return JSON with this schema:\n"
             "{\n"
             '  "status": "ready|insufficient_evidence",\n'
             '  "reason": "short reason when insufficient_evidence",\n'
-            '  "problem_statement": "the full natural-language problem the student reads",\n'
+            '  "problem_statement": "the full natural-language problem the student reads (math in inline LaTeX \\\\( ... \\\\))",\n'
             '  "concepts_used": ["concept name", "..."],\n'
             '  "archetype": "short-kebab-label for the problem type",\n'
             '  "source_rule": "rule/formula/method from the inventory this problem rests on",\n'

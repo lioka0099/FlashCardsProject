@@ -4,6 +4,7 @@ import json
 import re
 import numpy as np
 from app.services.llm import CHAT_MODEL, CHAT_MODEL_FAST, chat_completions_create, embed_texts
+from app.services.math_formatting import MATH_DISPLAY_INSTRUCTION
 from app.services.retrieval import retrieve_with_proofs
 from app.data.vector_store import VectorStore
 from app.api.schemas import ProofSpan
@@ -411,6 +412,7 @@ def generate_answer(
         "- Do not include citations, source identifiers, or brackets like [S1, p.3] in the answer text.\n"
         "- If you lack evidence, state that explicitly and mention that the sources do not cover it.\n"
         "- Flashcard style: respond in 1–2 short sentences totaling ≤35 words while staying precise.\n"
+        f"- {MATH_DISPLAY_INSTRUCTION}\n"
         "- Output valid JSON only."
     )
 

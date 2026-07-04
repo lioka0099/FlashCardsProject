@@ -79,10 +79,18 @@
 }
 .side__title { margin: 0 0 1rem; font-size: 1.05rem; font-weight: 800; flex-shrink: 0; }
 .side__ring-wrap { display: grid; place-items: center; margin-bottom: 1.25rem; flex-shrink: 0; }
+/* Register --pct as a number so the conic-gradient fill can be transitioned
+   (raw custom properties are otherwise not animatable). */
+@property --pct {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
 .ring {
   position: relative; width: 9.5rem; height: 9.5rem; border-radius: 50%;
   background: conic-gradient(var(--p) calc(var(--pct, 0) * 1%), color-mix(in srgb, var(--p) 14%, #fff) 0);
   display: grid; place-items: center;
+  transition: --pct 700ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .ring::before { content: ""; position: absolute; inset: .85rem; border-radius: 50%; background: var(--card); }
 .ring__label { position: relative; text-align: center; }
@@ -114,7 +122,7 @@
 .topic__name { font-size: .88rem; font-weight: 600; color: var(--n700); }
 .topic__pct { margin-left: auto; font-size: .82rem; font-weight: 700; color: var(--n500); }
 .topic__track { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--c, var(--p)) 14%, #eef0f5); overflow: hidden; }
-.topic__fill { display: block; height: 100%; border-radius: 999px; background: var(--c, var(--p)); }
+.topic__fill { display: block; height: 100%; border-radius: 999px; background: var(--c, var(--p)); transition: width 700ms cubic-bezier(0.22, 1, 0.36, 1); }
 
 .side__history {
   display: flex; align-items: center; gap: .5rem;
@@ -185,6 +193,12 @@
   letter-spacing: -0.01em;
   color: var(--n900); white-space: pre-wrap;
 }
+/* MathText inner block: flow text + inline KaTeX naturally, wrapping to the
+   card width (the .card__q/.card__a parents stay flex only for centering). */
+.math-text { width: 100%; max-width: 100%; }
+.math-text .katex { font-size: 1.05em; }
+.math-text .katex-display { margin: .5em 0; overflow-x: auto; overflow-y: hidden; }
+
 .card__divider { width: 100%; height: 1px; border: 0; background: var(--line); margin: 0 0 1rem; }
 .card__hint { display: inline-flex; align-items: center; gap: .5rem; margin: 0 0 1.1rem; color: var(--n500); font-weight: 600; }
 .card__hint svg { color: var(--p); }
@@ -298,7 +312,7 @@
   .rate { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .rate__card { transition: none; }
+  .rate__card, .ring, .topic__fill { transition: none; }
 }
 
 .pdf-backdrop {

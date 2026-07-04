@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 
 from app.services.cards import DIFFICULTY_LEVELS, generate_question_at_difficulty
 from app.services.llm import CHAT_MODEL_FAST, chat_completions_create
+from app.services.math_formatting import MATH_DISPLAY_INSTRUCTION
 
 
 @dataclass
@@ -50,6 +51,7 @@ class StudentModelService:
             "- If confidence is low, prefer concrete and focused question.\n"
             "- If confidence is high, prefer slightly more challenging but still grounded question.\n"
             "- Do not mention memory, confidence, or excerpts directly.\n"
+            f"- {MATH_DISPLAY_INSTRUCTION}\n"
             "- Return JSON as {\"question\": \"...\"}."
         )
 

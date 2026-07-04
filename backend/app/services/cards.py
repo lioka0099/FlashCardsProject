@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.data.vector_store import VectorStore
 from app.services.llm import CHAT_MODEL_FAST, chat_completions_create
+from app.services.math_formatting import MATH_DISPLAY_INSTRUCTION
 
 
 # Bloom's Taxonomy difficulty levels for question generation
@@ -164,6 +165,7 @@ def generate_question_at_difficulty(
         "- Follow the difficulty level instruction carefully.\n"
         "- Ask about core concepts, not trivia.\n"
         "- Avoid referencing 'the excerpt' or 'the paper' in the question.\n"
+        f"- {MATH_DISPLAY_INSTRUCTION}\n"
         "- Return JSON: {\"question\": \"...\"}\n"
     )
     

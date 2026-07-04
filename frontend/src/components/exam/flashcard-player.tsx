@@ -5,6 +5,7 @@ import { motion, useAnimationControls } from "framer-motion";
 import { ArrowLeft, ArrowRight, Brain, Quote, RotateCcw, Sparkles } from "lucide-react";
 import type { Card } from "@/lib/api/client";
 import { RatingControls } from "@/components/exam/rating-controls";
+import { MathText } from "@/components/exam/math-text";
 import type { ReviewRating } from "@/lib/api/client";
 import "./study.css";
 
@@ -164,7 +165,9 @@ export function FlashcardPlayer({
                   ) : null}
                 </div>
                 {card.topic_label ? <p className="card__topic">{card.topic_label}</p> : null}
-                <p className="card__q">{card.question}</p>
+                <div className="card__q">
+                  <MathText className="math-text" text={card.question} />
+                </div>
                 <hr className="card__divider" />
                 <p className="card__hint">
                   <Sparkles size={18} aria-hidden="true" /> Try to answer before flipping the card
@@ -190,7 +193,9 @@ export function FlashcardPlayer({
                   ) : null}
                 </div>
                 {card.topic_label ? <p className="card__topic">{card.topic_label}</p> : null}
-                <div className="card__a">{card.answer}</div>
+                <div className="card__a">
+                  <MathText className="math-text" text={card.answer} />
+                </div>
                 <hr className="card__divider" />
                 <button
                   className="card__receipts"

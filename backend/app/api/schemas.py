@@ -119,6 +119,7 @@ class ProofSpan(BaseModel):
     end: int
     text: str
     score: float = 0.0
+    is_pdf: bool = True
 
 
 class CardResponse(BaseModel):

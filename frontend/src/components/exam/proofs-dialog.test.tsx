@@ -3,6 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import { ProofsDialog } from "@/components/exam/proofs-dialog";
 import type { Card } from "@/lib/api/client";
 
+vi.mock("@/components/exam/pdf-source-modal", () => ({
+  PdfSourceModal: ({ proof }: { proof: { doc_id: string } }) => (
+    <div data-testid="pdf-modal">modal:{proof.doc_id}</div>
+  ),
+}));
+
 function buildCard(overrides?: Partial<Card>): Card {
   return {
     card_id: "card-1",
@@ -30,14 +36,9 @@ function buildCard(overrides?: Partial<Card>): Card {
 }
 
 describe("ProofsDialog", () => {
-  it("renders source metadata and jump link", () => {
+  it("renders source metadata and opens the source modal", async () => {
     render(
-      <ProofsDialog
-        isOpen
-        card={buildCard()}
-        userId="guest"
-        onClose={() => {}}
-      />,
+      <ProofsDialog isOpen card={buildCard()} userId="guest" onClose={() => {}} />,
     );
 
     expect(
@@ -48,15 +49,15 @@ describe("ProofsDialog", () => {
     expect(
       screen.getByText("TCP guarantees in-order and reliable delivery."),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /open the source/i }),
-    ).toHaveAttribute(
-      "href",
-      expect.stringContaining("https://example.com/source.pdf"),
+
+    fireEvent.click(screen.getByRole("button", { name: /open the source/i }));
+    // PdfSourceModal is loaded via next/dynamic (client-only), so it resolves async.
+    expect(await screen.findByTestId("pdf-modal")).toHaveTextContent(
+      "modal:https://example.com/source.pdf",
     );
   });
 
-  it("builds an API source link when doc_id is internal", () => {
+  it("opens the modal with the internal doc_id", async () => {
     render(
       <ProofsDialog
         isOpen
@@ -78,13 +79,9 @@ describe("ProofsDialog", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /source 1/i }));
-    expect(
-      screen.getByRole("link", { name: /open the source/i }),
-    ).toHaveAttribute(
-      "href",
-      expect.stringContaining(
-        "/documents/local_file.pdf/source?exam_id=exam-1&user_id=guest",
-      ),
+    fireEvent.click(screen.getByRole("button", { name: /open the source/i }));
+    expect(await screen.findByTestId("pdf-modal")).toHaveTextContent(
+      "modal:local_file.pdf",
     );
   });
 
@@ -136,5 +133,56 @@ describe("ProofsDialog", () => {
 
     expect(screen.getByText("First proof text")).toBeInTheDocument();
     expect(screen.getByText("Second proof text")).toBeInTheDocument();
+  });
+
+  it("closing the dialog dismisses the PDF modal (FIX 2)", async () => {
+    render(
+      <ProofsDialog isOpen card={buildCard()} userId="guest" onClose={() => {}} />,
+    );
+
+    // Open accordion and launch the PDF modal
+    fireEvent.click(screen.getByRole("button", { name: /source 1/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open the source/i }));
+    expect(await screen.findByTestId("pdf-modal")).toBeInTheDocument();
+
+    // Close the evidence dialog via the Close button
+    fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
+
+    // The PDF modal must be gone
+    expect(screen.queryByTestId("pdf-modal")).toBeNull();
+  });
+
+  it("opens non-PDF sources in a new tab instead of the modal", () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    render(
+      <ProofsDialog
+        isOpen
+        card={buildCard({
+          proofs: [
+            {
+              doc_id: "notes.docx",
+              page: null,
+              start: 0,
+              end: 0,
+              text: "Some notes",
+              score: 0.5,
+              is_pdf: false,
+            },
+          ],
+        })}
+        userId="guest"
+        onClose={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /source 1/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open the source/i }));
+
+    expect(screen.queryByTestId("pdf-modal")).toBeNull();
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy.mock.calls[0][0]).toContain(
+      "/documents/notes.docx/source?exam_id=exam-1&user_id=guest",
+    );
+    openSpy.mockRestore();
   });
 });

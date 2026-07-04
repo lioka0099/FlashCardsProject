@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import shutil
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,6 +55,19 @@ def _detect_loader(path: str):
     )
 
 
+def _persist_source_file(
+    src_path: str,
+    doc_id: str,
+    dest_dir: Path = Path("uploads/documents"),
+) -> str:
+    """Copy the uploaded file to a doc_id-keyed path so it survives the
+    worker's temp-file cleanup. Returns the absolute destination path."""
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"{doc_id}{Path(src_path).suffix.lower()}"
+    shutil.copyfile(src_path, dest)
+    return str(dest.resolve())
+
+
 def _ingest_single(
     path: str,
     store: VectorStore,
@@ -69,9 +83,10 @@ def _ingest_single(
     logger.info("Loaded %s with %d pages", Path(path).name, len(pages))
 
     doc_id = uuid.uuid4().hex[:12]
+    persisted_path = _persist_source_file(path, doc_id)
     store.add_document(
         doc_id,
-        path=str(Path(path).resolve()),
+        path=persisted_path,
         title=Path(path).name,
         info={"pages": len(pages)},
     )

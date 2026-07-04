@@ -117,6 +117,13 @@ def _extract_uploaded_files(files: List[UploadFile]) -> tuple[List[Path], List[s
     return temp_paths, filenames
 
 
+def _is_pdf_ref(ref: str) -> bool:
+    """True when a document reference (a stored file path or an http doc_id URL)
+    points at a PDF. Used so the frontend can render PDFs in the preview modal
+    and fall back to a new tab for DOCX/TXT sources."""
+    return (ref or "").lower().split("?")[0].split("#")[0].rstrip().endswith(".pdf")
+
+
 def _card_to_response(store: VectorStore, card_id: str) -> Optional[CardResponse]:
     card = store.db.get_card(card_id=card_id)
     if card is None:
@@ -131,6 +138,7 @@ def _card_to_response(store: VectorStore, card_id: str) -> Optional[CardResponse
             end=p.end,
             text=p.text,
             score=float(p.score or 0.0),
+            is_pdf=_is_pdf_ref(store.db.get_document_path(doc_id=p.doc_id) or p.doc_id),
         )
         for p in store.db.list_card_proofs(card_id=card.card_id)
     ]

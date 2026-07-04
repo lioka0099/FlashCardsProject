@@ -4,6 +4,15 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { Card, ProofSpan } from "@/lib/api/client";
+import dynamic from "next/dynamic";
+import { buildSourceUrl } from "@/components/exam/pdf-source-url";
+
+// react-pdf (pdf.js) touches browser-only globals (DOMMatrix) at module load,
+// so it must never evaluate during SSR. Load the modal client-only.
+const PdfSourceModal = dynamic(
+  () => import("@/components/exam/pdf-source-modal").then((m) => m.PdfSourceModal),
+  { ssr: false },
+);
 
 type ProofsDialogProps = {
   isOpen: boolean;
@@ -12,39 +21,6 @@ type ProofsDialogProps = {
   onClose: () => void;
 };
 
-function hasExactOffsets(proof: ProofSpan) {
-  return (
-    Number.isFinite(proof.start) &&
-    Number.isFinite(proof.end) &&
-    proof.end > proof.start
-  );
-}
-
-const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
-
-function buildSourceUrl(proof: ProofSpan, card: Card, userId: string): string {
-  const isHttpUrl = /^https?:\/\//i.test(proof.doc_id);
-  const url = isHttpUrl
-    ? new URL(proof.doc_id)
-    : new URL(
-        `/documents/${encodeURIComponent(proof.doc_id)}/source`,
-        apiBaseUrl,
-      );
-  if (!isHttpUrl) {
-    url.searchParams.set("exam_id", card.exam_id);
-    url.searchParams.set("user_id", userId);
-  }
-  if (proof.page !== null) {
-    url.hash = `page=${proof.page}`;
-  }
-  if (hasExactOffsets(proof)) {
-    url.searchParams.set("start", String(proof.start));
-    url.searchParams.set("end", String(proof.end));
-  }
-  return url.toString();
-}
-
 export function ProofsDialog({
   isOpen,
   card,
@@ -52,9 +28,11 @@ export function ProofsDialog({
   onClose,
 }: ProofsDialogProps) {
   const [openProofKeys, setOpenProofKeys] = useState<Set<string>>(new Set());
+  const [sourceProof, setSourceProof] = useState<ProofSpan | null>(null);
 
   const closeDialog = useCallback(() => {
     setOpenProofKeys(new Set());
+    setSourceProof(null);
     onClose();
   }, [onClose]);
 
@@ -133,7 +111,6 @@ export function ProofsDialog({
           ) : (
             <ul className="evidence__list">
               {card.proofs.map((proof, proofIndex) => {
-                const jumpUrl = buildSourceUrl(proof, card, userId);
                 const pageLabel = proof.page !== null ? String(proof.page) : "Unavailable";
                 const proofKey = `${proof.doc_id}:${proof.page ?? "na"}:${proof.start}:${proof.end}`;
                 const panelId = `proof-panel-${proofIndex}`;
@@ -175,14 +152,21 @@ export function ProofsDialog({
                             <p className="evidence__meta">
                               Page: {pageLabel}
                             </p>
-                            <a
+                            <button
                               className="evidence__jump"
-                              href={jumpUrl}
-                              target="_blank"
-                              rel="noreferrer"
+                              type="button"
+                              onClick={() =>
+                                proof.is_pdf === false
+                                  ? window.open(
+                                      buildSourceUrl(proof, card, userId),
+                                      "_blank",
+                                      "noopener,noreferrer",
+                                    )
+                                  : setSourceProof(proof)
+                              }
                             >
                               Open the source
-                            </a>
+                            </button>
                           </div>
                         </motion.div>
                       ) : null}
@@ -193,6 +177,14 @@ export function ProofsDialog({
             </ul>
           )}
         </div>
+        {sourceProof ? (
+          <PdfSourceModal
+            proof={sourceProof}
+            card={card}
+            userId={userId}
+            onClose={() => setSourceProof(null)}
+          />
+        ) : null}
       </motion.section>
     </motion.div>
   );

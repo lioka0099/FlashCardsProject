@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from app.data.db_engine import get_db
+from app.data.db_engine import get_db, db_scope
 from app.data.models import (
     User, Document, Chunk, VectorIndexMap, Exam, ExamDocument,
     Topic, TopicChunk, TopicEvidence, TopicVector,
@@ -13,7 +13,7 @@ from app.data.models import (
     ExamSessionState, CardPresentationLog, Event, QuestionIndexEntry, StudentKnowledgeState,
 )
 from app.data.db_repository.dtos import (
-    JobData, StoredExam, _datetime_to_str, MAX_JOB_ATTEMPTS,
+    JobData, StoredExam, MAX_JOB_ATTEMPTS,
 )
 
 
@@ -70,13 +70,7 @@ class ExamRepo:
         session: Optional[Session] = None,
     ) -> Optional[StoredExam]:
         """Get exam by ID."""
-        if session is not None:
-            exam = session.query(Exam).filter(Exam.exam_id == exam_id).first()
-            if not exam:
-                return None
-            return StoredExam.from_orm(exam)
-
-        with get_db() as db:
+        with db_scope(session) as db:
             exam = db.query(Exam).filter(Exam.exam_id == exam_id).first()
             if not exam:
                 return None
@@ -106,8 +100,7 @@ class ExamRepo:
         session: Optional[Session] = None,
     ) -> None:
         """Update exam lifecycle fields and optionally merge info payload."""
-
-        def _apply(db: Session) -> None:
+        with db_scope(session) as db:
             row = db.query(Exam).filter(Exam.exam_id == exam_id).first()
             if row is None:
                 raise ValueError(f"Exam not found: {exam_id}")
@@ -132,12 +125,6 @@ class ExamRepo:
                 merged.update(info_patch)
                 row.info = merged
             row.updated_at = datetime.now(timezone.utc)
-
-        if session is not None:
-            _apply(session)
-            return
-        with get_db() as db:
-            _apply(db)
 
     def enqueue_job(self, *, exam_id: str, payload: dict) -> None:
         with get_db() as db:
@@ -205,19 +192,13 @@ class ExamRepo:
         session: Optional[Session] = None,
     ) -> int:
         """Increment exam diagnostic_answered and return the new value."""
-
-        def _apply(db: Session) -> int:
+        with db_scope(session) as db:
             row = db.query(Exam).filter(Exam.exam_id == exam_id).first()
             if row is None:
                 raise ValueError(f"Exam not found: {exam_id}")
             row.diagnostic_answered = max(0, int(row.diagnostic_answered or 0) + int(by))
             row.updated_at = datetime.now(timezone.utc)
             return int(row.diagnostic_answered)
-
-        if session is not None:
-            return _apply(session)
-        with get_db() as db:
-            return _apply(db)
     
     def attach_documents_to_exam(self, *, exam_id: str, doc_ids: Sequence[str]) -> None:
         """Attach documents to an exam."""

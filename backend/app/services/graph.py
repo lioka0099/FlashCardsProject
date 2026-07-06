@@ -7,7 +7,7 @@ Topic-scoped, difficulty-aware card generation with:
 - Robust retry logic (full restart on persistent failures)
 """
 
-from typing import Any, Dict, List, Optional, Sequence, Tuple, TypedDict
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 import hashlib

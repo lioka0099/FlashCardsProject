@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional, Set
+from typing import List, Set
 
 from app.data.db_repository import DBRepository, StoredTopic
 from app.deps import get_repo

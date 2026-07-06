@@ -18,7 +18,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from app.services.math_problem_spec import (
-    SUPPORTED_KINDS,
     normalize_math_problem_spec,
     _normalize_kind,
     _source_rule,

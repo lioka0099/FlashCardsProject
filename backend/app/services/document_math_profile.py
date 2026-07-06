@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional, Sequence
 
 from app.data.db_repository import StoredChunk
-from app.services.llm import CHAT_MODEL_FAST, chat_completions_create
+from app.services.llm import CHAT_MODEL_FAST, chat_completions_create, safe_json_load
 
 
 DocumentMathKind = Literal["math", "non_math", "mixed"]
@@ -183,7 +182,7 @@ def _classify_with_llm(*, sample: str, model: str) -> DocumentMathProfile:
         max_tokens=300,
         response_format={"type": "json_object"},
     )
-    payload = _safe_json_load(resp.choices[0].message.content or "{}")
+    payload = safe_json_load(resp.choices[0].message.content or "{}")
     label = str(payload.get("label") or "").strip().upper()
     kind = _LABEL_TO_KIND.get(label, "non_math")
     confidence = _coerce_confidence(payload.get("confidence"), default=0.7)
@@ -250,14 +249,6 @@ def _has_formula_or_equation(text: str) -> bool:
 def _evidence_phrases(text: str, *, limit: int = 4) -> List[str]:
     sentences = re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", text).strip())
     return [sentence[:160].strip() for sentence in sentences if sentence.strip()][:limit]
-
-
-def _safe_json_load(raw: str) -> Dict[str, Any]:
-    try:
-        data = json.loads(raw)
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
 
 
 def _coerce_confidence(value: Any, *, default: float) -> float:

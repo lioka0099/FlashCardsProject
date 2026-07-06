@@ -25,7 +25,7 @@ Usage:
 import os
 import logging
 from pathlib import Path
-from typing import Generator
+from typing import Generator, Optional
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine, event, text
@@ -253,6 +253,22 @@ def get_db() -> Generator[Session, None, None]:
         raise
     finally:
         db.close()
+
+
+@contextmanager
+def db_scope(session: Optional[Session] = None) -> Generator[Session, None, None]:
+    """Yield a session for a repo method that may run inside a caller's transaction.
+
+    If `session` is given, yield it as-is — the caller owns commit/rollback (used by
+    the reducers that thread one transaction across aggregates). Otherwise open a
+    fresh `get_db()` that commits on exit. Lets a method write its body once instead
+    of duplicating it for the session and non-session paths.
+    """
+    if session is not None:
+        yield session
+    else:
+        with get_db() as db:
+            yield db
 
 
 def get_db_session() -> Generator[Session, None, None]:

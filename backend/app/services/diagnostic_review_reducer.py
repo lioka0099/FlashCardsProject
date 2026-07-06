@@ -7,7 +7,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.data.db_engine import get_db
-from app.data.db_repository import DBRepository, StoredCardTopic, StoredTopicProficiency
+from app.data.db_repository import DBRepository, StoredCardTopic
 from app.deps import get_repo
 from app.services.diagnostic_coverage import all_topics_diagnosed
 from app.services.diagnostic_state import DiagnosticStateService

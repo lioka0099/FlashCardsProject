@@ -2,16 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 import math
-from typing import Callable, Dict, List, Optional, Sequence
+from typing import Callable, Dict, Optional, Sequence
 
 from app.data.db_engine import get_db
 from app.data.pinecone_backend import PineconeClient, pinecone_namespace
-from app.data.db_repository import DBRepository, StoredExam
+from app.data.db_repository import DBRepository
 from app.data.vector_store import VectorStore
 from app.deps import get_repo, get_store
-from app.services.cards import GeneratedCard
 from app.services.document_math_profile import classify_document_math_profile
 from app.services.exams import create_exam
 from app.services.graph import generate_starter_cards_v2

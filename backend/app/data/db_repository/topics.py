@@ -8,7 +8,7 @@ from app.data.models import (
     Topic, TopicChunk, TopicEvidence, TopicVector,
 )
 from app.data.db_repository.dtos import (
-    StoredTopic, _datetime_to_str,
+    StoredTopic,
 )
 
 

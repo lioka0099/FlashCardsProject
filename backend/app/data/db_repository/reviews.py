@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
-from app.data.db_engine import get_db
+from app.data.db_engine import get_db, db_scope
 from app.data.models import (
     Exam, Card, CardReview, CardScheduling, TopicProficiency, StudentKnowledgeState,
 )
 from app.data.db_repository.dtos import (
-    StoredCardScheduling, StoredTopicProficiency, StoredStudentKnowledgeState, _datetime_to_str,
+    StoredCardScheduling, StoredTopicProficiency, StoredStudentKnowledgeState,
 )
 
 
@@ -21,13 +21,7 @@ class ReviewRepo:
         session: Optional[Session] = None,
     ) -> Optional[StoredCardScheduling]:
         """Get scheduling row for a card."""
-        if session is not None:
-            row = session.query(CardScheduling).filter(CardScheduling.card_id == card_id).first()
-            if not row:
-                return None
-            return StoredCardScheduling.from_orm(row)
-
-        with get_db() as db:
+        with db_scope(session) as db:
             row = db.query(CardScheduling).filter(CardScheduling.card_id == card_id).first()
             if not row:
                 return None
@@ -47,32 +41,7 @@ class ReviewRepo:
         session: Optional[Session] = None,
     ) -> None:
         """Insert/update card scheduling state."""
-        if session is not None:
-            row = session.query(CardScheduling).filter(CardScheduling.card_id == card_id).first()
-            if row:
-                row.due_at = due_at
-                row.state = state
-                row.interval_days = interval_days
-                row.ease = ease
-                row.reps = reps
-                row.lapses = lapses
-                row.last_reviewed_at = last_reviewed_at
-            else:
-                session.add(
-                    CardScheduling(
-                        card_id=card_id,
-                        due_at=due_at,
-                        state=state,
-                        interval_days=interval_days,
-                        ease=ease,
-                        reps=reps,
-                        lapses=lapses,
-                        last_reviewed_at=last_reviewed_at,
-                    )
-                )
-            return
-
-        with get_db() as db:
+        with db_scope(session) as db:
             row = db.query(CardScheduling).filter(CardScheduling.card_id == card_id).first()
             if row:
                 row.due_at = due_at
@@ -172,21 +141,7 @@ class ReviewRepo:
         session: Optional[Session] = None,
     ) -> Optional[StoredTopicProficiency]:
         """Get proficiency row by user+exam+topic."""
-        if session is not None:
-            row = (
-                session.query(TopicProficiency)
-                .filter(
-                    TopicProficiency.user_id == user_id,
-                    TopicProficiency.exam_id == exam_id,
-                    TopicProficiency.topic_id == topic_id,
-                )
-                .first()
-            )
-            if not row:
-                return None
-            return StoredTopicProficiency.from_orm(row)
-
-        with get_db() as db:
+        with db_scope(session) as db:
             row = (
                 db.query(TopicProficiency)
                 .filter(
@@ -216,42 +171,7 @@ class ReviewRepo:
         session: Optional[Session] = None,
     ) -> None:
         """Insert/update topic proficiency row."""
-        if session is not None:
-            row = (
-                session.query(TopicProficiency)
-                .filter(
-                    TopicProficiency.user_id == user_id,
-                    TopicProficiency.exam_id == exam_id,
-                    TopicProficiency.topic_id == topic_id,
-                )
-                .first()
-            )
-            if row:
-                row.proficiency = proficiency
-                row.current_difficulty = current_difficulty
-                row.streak_up = streak_up
-                row.streak_down = streak_down
-                row.seen_count = seen_count
-                row.correctish_count = correctish_count
-                row.info = info or {}
-            else:
-                session.add(
-                    TopicProficiency(
-                        user_id=user_id,
-                        exam_id=exam_id,
-                        topic_id=topic_id,
-                        proficiency=proficiency,
-                        current_difficulty=current_difficulty,
-                        streak_up=streak_up,
-                        streak_down=streak_down,
-                        seen_count=seen_count,
-                        correctish_count=correctish_count,
-                        info=info or {},
-                    )
-                )
-            return
-
-        with get_db() as db:
+        with db_scope(session) as db:
             row = (
                 db.query(TopicProficiency)
                 .filter(
@@ -315,21 +235,7 @@ class ReviewRepo:
         session: Optional[Session] = None,
     ) -> Optional[StoredStudentKnowledgeState]:
         """Get student memory state for a user/exam/topic."""
-        if session is not None:
-            row = (
-                session.query(StudentKnowledgeState)
-                .filter(
-                    StudentKnowledgeState.user_id == user_id,
-                    StudentKnowledgeState.exam_id == exam_id,
-                    StudentKnowledgeState.topic_id == topic_id,
-                )
-                .first()
-            )
-            if not row:
-                return None
-            return StoredStudentKnowledgeState.from_orm(row)
-
-        with get_db() as db:
+        with db_scope(session) as db:
             row = (
                 db.query(StudentKnowledgeState)
                 .filter(
@@ -354,30 +260,7 @@ class ReviewRepo:
     ) -> None:
         """Insert/update student memory state for a user/exam/topic."""
         payload = dict(memory or {})
-        if session is not None:
-            row = (
-                session.query(StudentKnowledgeState)
-                .filter(
-                    StudentKnowledgeState.user_id == user_id,
-                    StudentKnowledgeState.exam_id == exam_id,
-                    StudentKnowledgeState.topic_id == topic_id,
-                )
-                .first()
-            )
-            if row:
-                row.memory = payload
-            else:
-                session.add(
-                    StudentKnowledgeState(
-                        user_id=user_id,
-                        exam_id=exam_id,
-                        topic_id=topic_id,
-                        memory=payload,
-                    )
-                )
-            return
-
-        with get_db() as db:
+        with db_scope(session) as db:
             row = (
                 db.query(StudentKnowledgeState)
                 .filter(
@@ -434,20 +317,7 @@ class ReviewRepo:
     ) -> str:
         """Insert a card review row and return review_id."""
         rid = review_id or uuid.uuid4().hex[:20]
-        if session is not None:
-            session.add(
-                CardReview(
-                    review_id=rid,
-                    user_id=user_id,
-                    exam_id=exam_id,
-                    card_id=card_id,
-                    topic_id=topic_id,
-                    rating=rating,
-                    info=info or {},
-                )
-            )
-            return rid
-        with get_db() as db:
+        with db_scope(session) as db:
             db.add(
                 CardReview(
                     review_id=rid,
@@ -473,23 +343,7 @@ class ReviewRepo:
         """Return existing review_id for a matching idempotency key."""
         if not idempotency_key:
             return None
-        if session is not None:
-            row = (
-                session.query(CardReview)
-                .filter(
-                    CardReview.user_id == user_id,
-                    CardReview.exam_id == exam_id,
-                    CardReview.card_id == card_id,
-                )
-                .all()
-            )
-            for r in row:
-                info = r.info or {}
-                if str(info.get("idempotency_key") or "") == idempotency_key:
-                    return r.review_id
-            return None
-
-        with get_db() as db:
+        with db_scope(session) as db:
             row = (
                 db.query(CardReview)
                 .filter(

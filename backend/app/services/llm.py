@@ -1,4 +1,5 @@
-from typing import Any, Callable, List, Optional, TypeVar
+from typing import Any, Callable, List, TypeVar
+import json
 import logging
 import random
 import time
@@ -120,3 +121,12 @@ def embed_texts(texts: List[str]) -> np.ndarray:
 
 def embed_query(text: str) -> np.ndarray:
     return embed_texts([text])
+
+
+def safe_json_load(raw: str) -> dict:
+    """Parse an LLM JSON response, returning {} on failure or non-object result."""
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}

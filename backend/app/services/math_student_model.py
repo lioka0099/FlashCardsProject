@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from app.services.difficulty_frameworks import get_level
-from app.services.llm import CHAT_MODEL, chat_completions_create
+from app.services.llm import CHAT_MODEL, chat_completions_create, safe_json_load
 from app.services.math_compound_spec import (
     math_structural_fingerprint,
     normalize_compound_spec,
@@ -33,14 +32,6 @@ _CHECK_KIND_GUIDE = (
 class MathQuestionResult:
     question: str
     payload: Dict[str, Any]
-
-
-def _safe_json_load(raw: str) -> Dict[str, Any]:
-    try:
-        data = json.loads(raw)
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
 
 
 def _archetypes_from_fingerprints(fingerprints: List[str]) -> List[str]:
@@ -164,7 +155,7 @@ class MathStudentModelService:
             max_tokens=1600,
             response_format={"type": "json_object"},
         )
-        payload = _safe_json_load(resp.choices[0].message.content or "{}")
+        payload = safe_json_load(resp.choices[0].message.content or "{}")
 
         # source_rule is descriptive metadata, not a correctness signal — don't
         # reject an otherwise-solvable problem just because the author omitted it.

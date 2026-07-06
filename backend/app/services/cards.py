@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.data.db_repository import DBRepository
 from app.data.vector_store import VectorStore
 from app.deps import get_repo, get_store
-from app.services.llm import CHAT_MODEL_FAST, chat_completions_create
+from app.services.llm import CHAT_MODEL_FAST, chat_completions_create, safe_json_load
 from app.services.math_formatting import MATH_DISPLAY_INSTRUCTION
 
 
@@ -53,14 +52,6 @@ class GeneratedCard:
     proofs: List[Dict[str, Any]]
 
 
-def _safe_json_load(s: str) -> Dict[str, Any]:
-    try:
-        obj = json.loads(s)
-        return obj if isinstance(obj, dict) else {}
-    except Exception:
-        return {}
-
-
 def pick_starter_topics(
     *,
     exam_id: str,
@@ -80,47 +71,6 @@ def pick_starter_topics(
         scored.append((n_chunks, t.topic_id, t.label))
     scored.sort(key=lambda x: x[0], reverse=True)
     return [(topic_id, label) for _, topic_id, label in scored[: max(0, int(n))]]
-
-
-# def generate_starter_question(
-#     *,
-#     topic_label: str,
-#     context_pack: str,
-#     model: str = CHAT_MODEL_FAST,
-# ) -> str:
-#     """
-#     Generate one easy diagnostic flashcard question for a topic, grounded in the provided excerpts.
-#     """
-#     sys_prompt = (
-#         "You write high-quality flashcard questions.\n"
-#         "You must ground the question in the provided excerpts and avoid generic questions.\n"
-#         "Return JSON only."
-#     )
-#     user_prompt = (
-#         f"TOPIC LABEL:\n{topic_label}\n\n"
-#         "EXCERPTS (from the document, same topic):\n"
-#         f"{context_pack}\n\n"
-#         "Create ONE easy diagnostic flashcard question that tests basic understanding of this topic.\n"
-#         "Rules:\n"
-#         "- The question must be answerable using ONLY the excerpts.\n"
-#         "- Ask about a core definition, relationship, or key claim (not trivia).\n"
-#         "- Avoid referencing 'the excerpt' or 'the paper' in the question.\n"
-#         "- Return JSON: {\"question\": \"...\"}\n"
-#     )
-#     resp = chat_completions_create(
-#         model=model,
-#         messages=[
-#             {"role": "system", "content": sys_prompt},
-#             {"role": "user", "content": user_prompt},
-#         ],
-#         temperature=0.3,
-#         max_tokens=180,
-#         response_format={"type": "json_object"},
-#     )
-#     raw = resp.choices[0].message.content or "{}"
-#     data = _safe_json_load(raw)
-#     q = str(data.get("question") or "").strip()
-#     return q
 
 
 def generate_question_at_difficulty(
@@ -185,7 +135,7 @@ def generate_question_at_difficulty(
         response_format={"type": "json_object"},
     )
     raw = resp.choices[0].message.content or "{}"
-    data = _safe_json_load(raw)
+    data = safe_json_load(raw)
     q = str(data.get("question") or "").strip()
     return q
 

@@ -16,11 +16,10 @@ topic. All parsing/merging helpers are pure and unit-tested without a live LLM.
 
 from __future__ import annotations
 
-import json
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
-from app.services.llm import CHAT_MODEL, chat_completions_create
+from app.services.llm import CHAT_MODEL, chat_completions_create, safe_json_load
 
 
 INVENTORY_INFO_KEY = "math_concept_inventory"
@@ -101,14 +100,6 @@ def parse_inventory_payload(payload: Optional[Dict[str, Any]]) -> ConceptInvento
     )
 
 
-def _safe_json_load(raw: str) -> Dict[str, Any]:
-    try:
-        data = json.loads(raw)
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
-
-
 class MathConceptInventoryService:
     """Extracts (and caches) the math concept inventory for a topic."""
 
@@ -162,7 +153,7 @@ class MathConceptInventoryService:
                 max_tokens=900,
                 response_format={"type": "json_object"},
             )
-            payload = _safe_json_load(resp.choices[0].message.content or "{}")
+            payload = safe_json_load(resp.choices[0].message.content or "{}")
         except Exception:
             return ConceptInventory(source="error")
         payload["source"] = "llm"

@@ -2,15 +2,14 @@
 import numpy as np
 import uuid
 from typing import Any, Dict, List, Optional, Sequence
-from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from app.data.db_engine import get_db
+from app.data.db_engine import get_db, db_scope
 from app.data.models import (
     Card, CardProof, CardTopic, QuestionIndexEntry,
 )
 from app.data.db_repository.dtos import (
-    StoredCard, StoredCardProof, StoredCardTopic, _datetime_to_str,
+    StoredCard, StoredCardProof, StoredCardTopic,
 )
 
 
@@ -158,8 +157,7 @@ class CardRepo:
         if primary_count != 1:
             raise ValueError("card_topics requires exactly one primary topic")
 
-        if session is not None:
-            db = session
+        with db_scope(session) as db:
             db.query(CardTopic).filter(CardTopic.card_id == card_id).delete(
                 synchronize_session=False
             )
@@ -175,21 +173,6 @@ class CardRepo:
             # SessionLocal uses autoflush=False; flush so immediate follow-up reads
             # in the same transaction can see the newly inserted topic links.
             db.flush()
-            return
-
-        with get_db() as db:
-            db.query(CardTopic).filter(CardTopic.card_id == card_id).delete(
-                synchronize_session=False
-            )
-            for t in rows:
-                db.add(
-                    CardTopic(
-                        card_id=card_id,
-                        topic_id=t["topic_id"],
-                        role=t["role"],
-                        weight=t["weight"],
-                    )
-                )
 
     def list_card_topics(
         self,
@@ -198,18 +181,7 @@ class CardRepo:
         session: Optional[Session] = None,
     ) -> List[StoredCardTopic]:
         """List card-topic links for a card (primary first)."""
-        if session is not None:
-            rows = (
-                session.query(CardTopic)
-                .filter(CardTopic.card_id == card_id)
-                .order_by(CardTopic.role.asc(), CardTopic.created_at.asc())
-                .all()
-            )
-            return [
-                StoredCardTopic.from_orm(r)
-                for r in rows
-            ]
-        with get_db() as db:
+        with db_scope(session) as db:
             rows = (
                 db.query(CardTopic)
                 .filter(CardTopic.card_id == card_id)

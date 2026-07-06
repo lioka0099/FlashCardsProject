@@ -18,6 +18,16 @@
 .ct__sparkle { color: var(--p); }
 .ct__title { font-family: var(--font-display); font-size: 2rem; font-weight: 800; margin: .15rem 0 0; }
 .ct__sub { color: var(--n500); max-width: 36ch; margin: 0; }
+.ct__btn {
+  display: inline-flex; align-items: center; gap: .5rem; margin-top: 1.25rem;
+  border: 0; cursor: pointer; padding: .85rem 1.4rem; border-radius: 12px;
+  background: linear-gradient(135deg, #6f42c1, #a78bfa); color: #fff;
+  font-size: .95rem; font-weight: 700;
+  box-shadow: 0 14px 36px rgba(111, 66, 193, 0.18);
+  transition: transform .15s ease, filter .15s ease;
+}
+.ct__btn:hover { transform: translateY(-1px); filter: brightness(1.05); }
+.ct__btn:active { transform: translateY(0); }
 .ct__file { display: inline-flex; align-items: center; gap: .5rem; margin-top: .6rem;
   padding: .45rem .9rem; border: 1px solid var(--line); border-radius: 12px; background: var(--card);
   color: var(--p); font-weight: 600; }

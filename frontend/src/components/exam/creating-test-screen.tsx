@@ -39,7 +39,7 @@ export function CreatingTestScreen({ examId }: { examId: string }) {
             <h1 className="ct__title">We couldn&rsquo;t finish your test</h1>
             <p className="ct__sub">{message}</p>
             <div style={{ display: "flex", gap: "0.75rem", marginTop: "1rem" }}>
-              <button type="button" className="dash-submit" onClick={() => router.push("/")}>
+              <button type="button" className="ct__btn" onClick={() => router.push("/")}>
                 Back home
               </button>
             </div>

@@ -194,6 +194,6 @@ describe("FlashcardPlayer", () => {
     );
 
     expect(screen.getByRole("button", { name: "Preparing..." })).toBeDisabled();
-    expect(screen.getByText(/Preparing a card that matches your current level/i)).toBeInTheDocument();
+    expect(screen.getByText(/Crafting your next card/i)).toBeInTheDocument();
   });
 });

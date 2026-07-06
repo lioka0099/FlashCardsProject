@@ -172,6 +172,11 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
   }
 
   const handleNext = useCallback(async () => {
+    // Block re-entry while a card is generating: a second mutate would race and
+    // corrupt the active-card/history state.
+    if (nextCardMutation.isPending) {
+      return;
+    }
     if (isHistoryForwardAvailable) {
       setHistoryIndex((previous) => previous + 1);
       setIsAnswerVisible(false);
@@ -185,12 +190,14 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
   }, [isHistoryForwardAvailable, nextCardMutation]);
 
   const handlePrevious = useCallback(async () => {
-    if (!isPreviousEnabled) {
+    // Freeze history navigation while generating (mouse and keyboard both route
+    // here) so we don't swap the current card out from under the mutation.
+    if (!isPreviousEnabled || nextCardMutation.isPending) {
       return;
     }
     setHistoryIndex((previous) => previous - 1);
     setIsAnswerVisible(false);
-  }, [isPreviousEnabled]);
+  }, [isPreviousEnabled, nextCardMutation.isPending]);
 
   function handleToggleAnswer() {
     if (!currentCard) {
@@ -243,7 +250,15 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
       transition={{ duration: 0.35, ease: "easeOut" }}
     >
       <header className="study__topbar">
-        <Link className="study__back" href="/">
+        <Link
+          className={`study__back${isPreparingNextCard ? " study__back--disabled" : ""}`}
+          href="/"
+          aria-disabled={isPreparingNextCard || undefined}
+          tabIndex={isPreparingNextCard ? -1 : undefined}
+          onClick={(event) => {
+            if (isPreparingNextCard) event.preventDefault();
+          }}
+        >
           <Home size={18} aria-hidden="true" />
           Back to Home
         </Link>
@@ -267,7 +282,7 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
           </section>
         ) : null}
 
-        <ProgressPanel examId={examId} userId={userId} />
+        <ProgressPanel examId={examId} userId={userId} navDisabled={isPreparingNextCard} />
 
         {sessionLoadError ? (
           <section className="study__banner">
@@ -293,7 +308,7 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
             onRate={(rating) => void handleRate(rating)}
             onLoadPrevious={() => void handlePrevious()}
             onLoadNext={() => void handleNext()}
-            isPreviousEnabled={isPreviousEnabled}
+            isPreviousEnabled={isPreviousEnabled && !isPreparingNextCard}
           />
         )}
       </div>

@@ -6,15 +6,16 @@ import { ChevronRight, History } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getExamProgress } from "@/lib/api/client";
 import { mapApiError } from "@/lib/api/ui-error";
+import { getTopicColor } from "@/lib/topic-colors";
 import { InlineError } from "@/components/common/inline-error";
 
 type ProgressPanelProps = {
   examId: string;
   userId: string;
+  // Freeze navigation (the History link) while the next card is generating, so
+  // the user can't leave mid-mutation and corrupt the session state.
+  navDisabled?: boolean;
 };
-
-// Cycled per-topic accent colors (matches the mockup's colored dots + bars).
-const TOPIC_COLORS = ["#6f42c1", "#2db7c5", "#22c55e", "#f59e0b", "#ef4444", "#a78bfa"];
 
 function toPercent(value: number | null) {
   if (value === null || Number.isNaN(value)) {
@@ -23,7 +24,7 @@ function toPercent(value: number | null) {
   return Math.max(0, Math.min(100, Math.round(value * 100)));
 }
 
-export function ProgressPanel({ examId, userId }: ProgressPanelProps) {
+export function ProgressPanel({ examId, userId, navDisabled = false }: ProgressPanelProps) {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["exam-progress", examId, userId],
     queryFn: () => getExamProgress(examId, userId),
@@ -93,9 +94,9 @@ export function ProgressPanel({ examId, userId }: ProgressPanelProps) {
                 >
                   <div className="side__scroll" ref={scrollRef} onScroll={updateFades}>
                     <ul className="side__topics">
-                      {data?.topics.map((topic, index) => {
+                      {data?.topics.map((topic) => {
                         const pct = toPercent(topic.proficiency);
-                        const color = TOPIC_COLORS[index % TOPIC_COLORS.length];
+                        const color = getTopicColor(topic.topic_label);
                         return (
                           <li key={topic.topic_id} style={{ ["--c" as string]: color }}>
                             <div className="topic__head">
@@ -117,7 +118,15 @@ export function ProgressPanel({ examId, userId }: ProgressPanelProps) {
           </>
         ) : null}
 
-        <Link className="side__history" href={`/exams/${examId}/history`}>
+        <Link
+          className={`side__history${navDisabled ? " side__history--disabled" : ""}`}
+          href={`/exams/${examId}/history`}
+          aria-disabled={navDisabled || undefined}
+          tabIndex={navDisabled ? -1 : undefined}
+          onClick={(event) => {
+            if (navDisabled) event.preventDefault();
+          }}
+        >
           <History size={18} aria-hidden="true" />
           <span>
             View History

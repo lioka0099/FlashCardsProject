@@ -248,7 +248,7 @@ describe("ExamWorkspace", () => {
 
     expect(screen.getByText("Question 1")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Preparing..." })).toBeDisabled();
-    expect(screen.getByText(/Preparing a card that matches your current level/i)).toBeInTheDocument();
+    expect(screen.getByText(/Crafting your next card/i)).toBeInTheDocument();
 
     pendingNext.resolve(nextCardResponse(buildCard("c2", "Question 2")));
     await screen.findByText("Question 2");

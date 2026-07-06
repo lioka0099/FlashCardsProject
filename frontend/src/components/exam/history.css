@@ -1,0 +1,178 @@
+.history {
+  --p: #6f42c1; --p-strong: #5b2ea6; --accent: #2db7c5;
+  --n900: #0f172a; --n700: #334155; --n500: #64748b;
+  --line: #e9e9f2; --card: #fff; --bg: #f7f7fb;
+
+  display: flex; flex-direction: column; gap: 1rem;
+  height: 100vh;
+  background: var(--bg);
+  padding: 1.25rem;
+}
+
+.hist-topbar { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
+.hist-back {
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .55rem 1rem; border-radius: 12px;
+  border: 1px solid var(--line); background: #fff; color: var(--p);
+  font-weight: 700; font-size: .9rem; text-decoration: none;
+}
+.hist-back:hover { background: color-mix(in srgb, var(--p) 8%, #fff); }
+.hist-deck { border-left: 1px solid var(--line); padding-left: 1rem; }
+.hist-deck__title { margin: 0; font-size: 1.05rem; font-weight: 800; color: var(--n900); }
+.hist-deck__sub { margin: .1rem 0 0; font-size: .82rem; color: var(--n500); }
+.hist-resume {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .6rem 1.2rem; border-radius: 12px;
+  background: var(--p); color: #fff; border: 1px solid var(--p);
+  font-weight: 700; font-size: .9rem; text-decoration: none;
+}
+.hist-resume:hover { background: var(--p-strong); border-color: var(--p-strong); }
+
+.history__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
+  gap: 1.25rem;
+  flex: 1; min-height: 0;
+}
+@media (max-width: 960px) {
+  .history { height: auto; }
+  .history__grid { grid-template-columns: 1fr; }
+}
+
+/* ---------- Left panel ---------- */
+.hist-panel {
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, .06);
+  padding: 1.5rem;
+}
+.hist-panel__title { margin: 0; font-size: 1.5rem; font-weight: 800; color: var(--n900); letter-spacing: -0.02em; }
+.hist-panel__sub { margin: .35rem 0 0; color: var(--n500); font-size: .92rem; }
+
+.hist-filters { display: flex; gap: .6rem; margin: 1.25rem 0; flex-wrap: wrap; }
+.hist-select {
+  position: relative; flex: 1 1 8rem; min-width: 0;
+}
+.hist-select select {
+  width: 100%; appearance: none; cursor: pointer;
+  padding: .6rem 2rem .6rem .9rem; border-radius: 12px;
+  border: 1px solid var(--line); background: #fff; color: var(--n700);
+  font-size: .88rem; font-weight: 600; font-family: inherit;
+}
+.hist-select select:focus-visible { outline: 2px solid color-mix(in srgb, var(--p) 45%, #fff); outline-offset: 1px; }
+.hist-select__chev { position: absolute; right: .7rem; top: 50%; transform: translateY(-50%); color: var(--n500); pointer-events: none; }
+.hist-search { position: relative; flex: 1 1 100%; }
+.hist-search__icon { position: absolute; left: .8rem; top: 50%; transform: translateY(-50%); color: var(--n500); }
+.hist-search input {
+  width: 100%; padding: .6rem .9rem .6rem 2.3rem; border-radius: 12px;
+  border: 1px solid var(--line); background: #fff; color: var(--n900);
+  font-size: .9rem; font-family: inherit;
+}
+.hist-search input:focus-visible { outline: 2px solid color-mix(in srgb, var(--p) 45%, #fff); outline-offset: 1px; }
+
+.hist-note {
+  border: 1px solid var(--line); background: #fafafe; border-radius: 12px;
+  padding: .75rem .9rem; color: var(--n500); font-size: .9rem;
+}
+
+.hist-list { list-style: none; margin: 0; padding: 0 .35rem 0 0; overflow-y: auto; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: .55rem; }
+
+/* Rating accent color, shared by the list item and the preview shell.
+   No `.hist-item` default here — it would override these (equal specificity,
+   later in source), leaving every face grey. `rc--none` is the fallback. */
+.rc--none { --rc: #94a3b8; }
+.rc--i_knew_it { --rc: #22c55e; }
+.rc--almost_knew { --rc: #f59e0b; }
+.rc--learned_now { --rc: #0ea5e9; }
+.rc--dont_understand { --rc: #ef4444; }
+
+.hist-item__btn {
+  position: relative; width: 100%; text-align: left; cursor: pointer;
+  display: flex; gap: .8rem; align-items: flex-start;
+  padding: .85rem .95rem; border-radius: 14px;
+  border: 1px solid var(--line); background: #fff;
+  transition: border-color .14s ease, background .14s ease, box-shadow .14s ease;
+}
+.hist-item__btn:hover { border-color: color-mix(in srgb, var(--p) 35%, var(--line)); background: color-mix(in srgb, var(--p) 4%, #fff); }
+.hist-item__btn[aria-current="true"] {
+  border-color: color-mix(in srgb, var(--p) 40%, var(--line));
+  background: color-mix(in srgb, var(--p) 8%, #fff);
+  box-shadow: inset 3px 0 0 var(--p);
+}
+
+.hist-item__face {
+  flex-shrink: 0; width: 2.5rem; height: 2.5rem; border-radius: 50%;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--rc) 16%, #fff); color: var(--rc);
+}
+.hist-item__body { min-width: 0; flex: 1; }
+.hist-item__head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.hist-item__topic { font-size: .82rem; font-weight: 700; color: var(--tc, var(--p)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hist-item__time { flex-shrink: 0; font-size: .78rem; color: var(--n500); font-weight: 500; }
+.hist-item__q {
+  margin: .25rem 0 0; font-size: .92rem; font-weight: 600; color: var(--n900); line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* ---------- Right preview ---------- */
+.hist-stage {
+  display: flex; align-items: center; justify-content: center; min-height: 0;
+  background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, .06);
+  padding: 1.5rem;
+}
+.hist-empty { text-align: center; color: var(--n500); }
+.hist-empty__title { margin: 0 0 .4rem; font-size: 1.1rem; font-weight: 700; color: var(--n700); }
+
+.hist-shell { position: relative; width: 100%; max-width: 46rem; height: 100%; min-height: 26rem; perspective: 1400px; }
+.hist-face {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+  border: 1px solid var(--line); border-radius: 24px; background: var(--card);
+  padding: 2rem; backface-visibility: hidden; overflow: hidden;
+}
+.hist-face__meta { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .5rem; }
+.hist-pill {
+  display: inline-flex; align-items: center; gap: .45rem; padding: .45rem .9rem; border-radius: 999px;
+  background: color-mix(in srgb, var(--p) 12%, #fff); color: var(--p); font-weight: 700; font-size: .88rem;
+}
+.hist-pill--rate {
+  background: color-mix(in srgb, var(--rc, #94a3b8) 15%, #fff);
+  color: color-mix(in srgb, var(--rc, #94a3b8) 72%, #000);
+}
+.hist-face__topic { margin: .55rem 0 0; text-align: center; color: var(--n500); font-weight: 600; font-size: .92rem; }
+.hist-face__q, .hist-face__a {
+  flex: 1; min-height: 0; width: 100%; overflow-y: auto;
+  display: flex; align-items: safe center; justify-content: center; text-align: center;
+  padding: 1rem .5rem; color: var(--n900); white-space: pre-wrap; letter-spacing: -0.01em;
+}
+.hist-face__q { font-size: clamp(1.15rem, 1.8vw, 1.6rem); font-weight: 700; line-height: 1.4; }
+.hist-face__a {
+  font-size: clamp(1rem, 1.5vw, 1.3rem); font-weight: 500; line-height: 1.5;
+  flex-direction: column; align-items: stretch; text-align: left;
+}
+/* MathText inside the preview card (study.css isn't loaded on this route). */
+.hist-face .math-text { width: 100%; max-width: 100%; }
+.hist-face .math-text .katex { font-size: 1.05em; }
+.hist-face .math-text .katex-display { margin: .5em 0; overflow-x: auto; overflow-y: hidden; }
+
+.hist-divider { width: 100%; height: 1px; border: 0; background: var(--line); margin: 0 0 1rem; }
+.hist-flip {
+  display: inline-flex; align-items: center; gap: .5rem; padding: .7rem 1.5rem; border-radius: 14px;
+  border: 1px solid var(--line); background: #fff; color: var(--p); font-weight: 700; cursor: pointer;
+}
+.hist-flip:hover { background: color-mix(in srgb, var(--p) 8%, #fff); }
+
+.hist-proofs { display: flex; flex-direction: column; gap: .5rem; margin-top: .5rem; }
+.hist-proofs__title { display: flex; align-items: center; gap: .45rem; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--n500); margin: .5rem 0 0; }
+.hist-proof { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; }
+.hist-proof__btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .6rem .8rem; background: none; border: 0; cursor: pointer; text-align: left; font-weight: 600; font-size: .86rem; color: var(--n700); }
+.hist-proof__chev { color: var(--n500); transition: transform .18s ease; flex-shrink: 0; }
+.hist-proof__chev--open { transform: rotate(180deg); }
+.hist-proof__body { padding: 0 .8rem .7rem; }
+.hist-proof__src { font-size: .74rem; color: var(--n500); font-weight: 600; margin: 0 0 .35rem; }
+.hist-proof__text { font-size: .86rem; color: var(--n700); white-space: pre-wrap; margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hist-item__btn { transition: none; }
+}

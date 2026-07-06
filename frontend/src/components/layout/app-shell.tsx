@@ -5,11 +5,14 @@ import { usePathname } from "next/navigation";
 import type { PropsWithChildren } from "react";
 
 export function AppShell({ children }: PropsWithChildren) {
-  // Home, the test-creation loading screen, and the study screen each render
-  // their own full-bleed chrome, so the shared app header is hidden on them.
+  // Home, the test-creation loading screen, the study screen, and the history
+  // screen each render their own full-bleed chrome (their own "Back to Home"
+  // topbar), so the shared app header is hidden on them.
   const pathname = usePathname();
   const isStudyScreen = /^\/exams\/[^/]+$/.test(pathname);
-  const showHeader = pathname !== "/" && !pathname.endsWith("/creating") && !isStudyScreen;
+  const isHistoryScreen = /^\/exams\/[^/]+\/history$/.test(pathname);
+  const showHeader =
+    pathname !== "/" && !pathname.endsWith("/creating") && !isStudyScreen && !isHistoryScreen;
 
   return (
     <div className="app-shell">

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, useAnimationControls } from "framer-motion";
+import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import { ArrowLeft, ArrowRight, Brain, Quote, RotateCcw, Sparkles } from "lucide-react";
 import type { Card } from "@/lib/api/client";
 import { RatingControls } from "@/components/exam/rating-controls";
 import { MathText } from "@/components/exam/math-text";
+import { CardLoader } from "@/components/exam/card-loader";
 import type { ReviewRating } from "@/lib/api/client";
 import "./study.css";
 
@@ -222,6 +223,21 @@ export function FlashcardPlayer({
               </>
             )}
           </motion.article>
+
+          <AnimatePresence>
+            {isPreparingNextCard ? (
+              <motion.div
+                key="card-loader"
+                className="card-loader-layer"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
+              >
+                <CardLoader />
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
 
         <button
@@ -250,11 +266,6 @@ export function FlashcardPlayer({
       ) : null}
 
       {statusMessage ? <p className="stage__status">{statusMessage}</p> : null}
-      {isPreparingNextCard ? (
-        <p className="stage__status" aria-live="polite">
-          Preparing a card that matches your current level. Tiny academic chef is plating.
-        </p>
-      ) : null}
     </motion.section>
   );
 }

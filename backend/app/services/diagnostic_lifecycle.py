@@ -10,6 +10,7 @@ from app.data.db_engine import get_db
 from app.data.pinecone_backend import PineconeClient, pinecone_namespace
 from app.data.db_repository import DBRepository, StoredExam
 from app.data.vector_store import VectorStore
+from app.deps import get_repo, get_store
 from app.services.cards import GeneratedCard
 from app.services.document_math_profile import classify_document_math_profile
 from app.services.exams import create_exam
@@ -65,8 +66,8 @@ class DiagnosticLifecycleService:
         store: Optional[VectorStore] = None,
         repo: Optional[DBRepository] = None,
     ) -> None:
-        self.store = store or VectorStore()
-        self.repo = repo or self.store.db
+        self.store = store or get_store()
+        self.repo = repo or get_repo()
 
     def _cleanup_failed_bootstrap(self, *, user_id: str, exam_id: str) -> None:
         # Best-effort external vector cleanup first.
@@ -93,7 +94,7 @@ class DiagnosticLifecycleService:
         info: Optional[Dict[str, object]] = None,
     ) -> DiagnosticBootstrapResult:
         exam_id = create_exam(
-            store=self.store,
+            repo=self.repo,
             user_id=user_id,
             title=title,
             mode=mode,
@@ -201,7 +202,7 @@ class DiagnosticLifecycleService:
         )
 
     def create_processing_exam(self, *, user_id: str, title: str, mode: str, info: dict) -> str:
-        exam_id = create_exam(store=self.store, user_id=user_id, title=title, mode=mode, info=(info or {}))
+        exam_id = create_exam(repo=self.repo, user_id=user_id, title=title, mode=mode, info=(info or {}))
         self.repo.update_exam_lifecycle(
             exam_id=exam_id, state="processing",
             info_patch={"progress": _initial_progress()},

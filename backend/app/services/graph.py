@@ -20,6 +20,7 @@ from langgraph.graph import StateGraph, END
 
 from app.data.vector_store import VectorStore
 from app.data.pinecone_backend import PineconeClient, pinecone_namespace
+from app.deps import get_repo, get_store
 from app.services.student_memory import StudentMemoryService
 from app.services.student_model import StudentModelService
 from app.services.teacher_model import TeacherModelService
@@ -295,7 +296,7 @@ def _get_or_build_concept_inventory(state: CardGenState, store: VectorStore):
     topic_info: Dict[str, Any] = {}
     topic_label = state["topic_label"]
     try:
-        topics = store.db.list_topics(exam_id=state["exam_id"])
+        topics = get_repo().list_topics(exam_id=state["exam_id"])
         stored = next((t for t in topics if t.topic_id == state["topic_id"]), None)
         topic_info = stored.info or {} if stored is not None else {}
         topic_label = stored.label if stored is not None else topic_label
@@ -312,7 +313,7 @@ def _get_or_build_concept_inventory(state: CardGenState, store: VectorStore):
         try:
             merged = dict(topic_info)
             merged[INVENTORY_INFO_KEY] = inventory.to_info()
-            store.db.upsert_topic(
+            get_repo().upsert_topic(
                 topic_id=state["topic_id"],
                 exam_id=state["exam_id"],
                 label=topic_label,
@@ -340,7 +341,7 @@ def node_generate_question(state: CardGenState) -> CardGenState:
                 if str(seen.question_text or "").strip()
             ]
             blocked_questions.extend(
-                store.db.list_question_texts_for_exam(
+                get_repo().list_question_texts_for_exam(
                     exam_id=state["exam_id"],
                     limit=100,
                 )
@@ -352,7 +353,7 @@ def node_generate_question(state: CardGenState) -> CardGenState:
                 if str(seen.fingerprint or "").strip()
             ]
             blocked_fingerprints.extend(
-                store.db.list_math_fingerprints_for_exam(exam_id=state["exam_id"], limit=100)
+                get_repo().list_math_fingerprints_for_exam(exam_id=state["exam_id"], limit=100)
             )
             inventory = _get_or_build_concept_inventory(state, store)
             result = MathStudentModelService().generate_question(
@@ -457,11 +458,11 @@ def node_route_card(state: CardGenState) -> CardGenState:
     topic_info: Dict[str, Any] = {}
     document_math_profile: Optional[Dict[str, Any]] = None
     try:
-        exam = store.db.get_exam(state["exam_id"])
+        exam = get_repo().get_exam(state["exam_id"])
         if exam is not None and isinstance(exam.info, dict):
             raw_profile = exam.info.get("math_profile")
             document_math_profile = raw_profile if isinstance(raw_profile, dict) else {"kind": "non_math"}
-        topics = store.db.list_topics(exam_id=state["exam_id"])
+        topics = get_repo().list_topics(exam_id=state["exam_id"])
         topic_info = next((t.info or {} for t in topics if t.topic_id == state["topic_id"]), {})
     except Exception:
         topic_info = {}
@@ -514,8 +515,6 @@ def node_route_card(state: CardGenState) -> CardGenState:
 def node_embed_question(state: CardGenState) -> CardGenState:
     """Embed the generated question."""
     store = VectorStore(basepath=state["store_basepath"])
-    if store.vector_backend == "pinecone":
-        store.set_namespace(pinecone_namespace(user_id=state["user_id"], exam_id=state["exam_id"]))
     embedding = _embed_with_store_cache([state.get("question") or ""], store)[0]
     return {
         **state,
@@ -554,8 +553,7 @@ def node_check_uniqueness(state: CardGenState) -> CardGenState:
                     candidate_fp,
                 )
                 return {**state, "is_unique": False}
-        store = VectorStore(basepath=state["store_basepath"])
-        if store.db.has_equivalent_question_text(
+        if get_repo().has_equivalent_question_text(
             exam_id=state["exam_id"],
             question_text=state.get("question") or "",
         ):
@@ -565,7 +563,7 @@ def node_check_uniqueness(state: CardGenState) -> CardGenState:
             )
             return {**state, "is_unique": False}
         if candidate_fp and candidate_fp in set(
-            store.db.list_math_fingerprints_for_exam(exam_id=state["exam_id"], limit=200)
+            get_repo().list_math_fingerprints_for_exam(exam_id=state["exam_id"], limit=200)
         ):
             logger.info(
                 "Math uniqueness rejected indexed structural duplicate: topic_id=%s fingerprint=%s",
@@ -602,7 +600,6 @@ def node_check_uniqueness(state: CardGenState) -> CardGenState:
         )
 
     ns = pinecone_namespace(user_id=state["user_id"], exam_id=state["exam_id"])
-    store.set_namespace(ns)
     pc = PineconeClient()
     matches = pc.query(
         index=pc.questions,
@@ -643,7 +640,7 @@ def node_commit_question_index(state: CardGenState) -> CardGenState:
         raise RuntimeError("Cannot commit question index without question_id and embedding.")
 
     store = VectorStore(basepath=state["store_basepath"])
-    store.db.add_question_index_entry(
+    get_repo().add_question_index_entry(
         question_id=question_id,
         exam_id=state["exam_id"],
         topic_id=state["topic_id"],
@@ -656,7 +653,6 @@ def node_commit_question_index(state: CardGenState) -> CardGenState:
         raise RuntimeError("Question index commit requires VECTOR_BACKEND=pinecone.")
 
     ns = pinecone_namespace(user_id=state["user_id"], exam_id=state["exam_id"])
-    store.set_namespace(ns)
     pc = PineconeClient()
     max_retries = max(1, int(state["commit_retry_attempts"]))
     sleep_s = float(state["commit_retry_sleep_s"])
@@ -682,7 +678,7 @@ def node_commit_question_index(state: CardGenState) -> CardGenState:
                 raise
             time.sleep(sleep_s * attempt)
 
-    store.db.add_event(
+    get_repo().add_event(
         user_id=state["user_id"],
         exam_id=state["exam_id"],
         type="question_index_committed",
@@ -702,7 +698,7 @@ def node_generate_answer(state: CardGenState) -> CardGenState:
     """Generate answer using topic-scoped retrieval."""
     store = VectorStore(basepath=state["store_basepath"])
     if store.vector_backend == "pinecone":
-        store.set_namespace(pinecone_namespace(user_id=state["user_id"], exam_id=state["exam_id"]))
+        store = store.for_namespace(pinecone_namespace(user_id=state["user_id"], exam_id=state["exam_id"]))
     math_answer_payload: Dict[str, Any] = {}
     if state.get("card_route") == "math_calculation":
         math_result = MathTeacherModelService().generate_answer(
@@ -954,10 +950,6 @@ def node_adapt_math_question_failure(state: CardGenState) -> CardGenState:
 
 def node_store_card(state: CardGenState) -> CardGenState:
     """Store the validated card in the database."""
-    store = VectorStore(basepath=state["store_basepath"])
-    if store.vector_backend == "pinecone":
-        store.set_namespace(pinecone_namespace(user_id=state["user_id"], exam_id=state["exam_id"]))
-    
     card_id = uuid.uuid4().hex[:16]
     
     framework = state.get("difficulty_framework") or framework_for_route(state.get("card_route"))
@@ -993,7 +985,7 @@ def node_store_card(state: CardGenState) -> CardGenState:
             }
         )
 
-    store.db.upsert_card(
+    get_repo().upsert_card(
         card_id=card_id,
         exam_id=state["exam_id"],
         topic_id=state["topic_id"],
@@ -1027,7 +1019,7 @@ def node_store_card(state: CardGenState) -> CardGenState:
         }
         for i, p in enumerate(source_proofs)
     ]
-    store.db.replace_card_proofs(card_id=card_id, proofs=proofs_data)
+    get_repo().replace_card_proofs(card_id=card_id, proofs=proofs_data)
     
     # Create output card
     card = GeneratedCard(
@@ -1338,7 +1330,7 @@ def _run_question_phase(
     
     Returns the state with question + embedding stored, or None if failed.
     """
-    student_memory = StudentMemoryService(repo=store.db).get_topic_memory(
+    student_memory = StudentMemoryService(repo=get_repo()).get_topic_memory(
         user_id=user_id,
         exam_id=exam_id,
         topic_id=topic_id,
@@ -1487,10 +1479,10 @@ def generate_single_card(
     Retries until success or max restarts reached.
     Returns None only if all retries exhausted (rare edge case).
     """
-    store = store or VectorStore()
+    store = store or get_store()
     if store.vector_backend == "pinecone":
-        store.set_namespace(pinecone_namespace(user_id=user_id, exam_id=exam_id))
-    student_memory = StudentMemoryService(repo=store.db).get_topic_memory(
+        store = store.for_namespace(pinecone_namespace(user_id=user_id, exam_id=exam_id))
+    student_memory = StudentMemoryService(repo=get_repo()).get_topic_memory(
         user_id=user_id,
         exam_id=exam_id,
         topic_id=topic_id,
@@ -1579,12 +1571,12 @@ def generate_starter_cards_v2(
     
     Returns list of generated cards (may be < N if topics insufficient).
     """
-    store = store or VectorStore()
+    store = store or get_store()
     if store.vector_backend == "pinecone":
-        store.set_namespace(pinecone_namespace(user_id=user_id, exam_id=exam_id))
-    
+        store = store.for_namespace(pinecone_namespace(user_id=user_id, exam_id=exam_id))
+
     # Pick top N topics
-    picked = pick_starter_topics(exam_id=exam_id, store=store, n=n)
+    picked = pick_starter_topics(exam_id=exam_id, repo=get_repo(), n=n)
     if not picked:
         logger.warning("No topics found for exam %s", exam_id)
         return []
@@ -1592,10 +1584,10 @@ def generate_starter_cards_v2(
     # Prepare context packs for each topic
     topic_contexts: Dict[str, Dict[str, Any]] = {}
     for topic_id, topic_label in picked:
-        allowed_chunk_ids = store.db.list_chunk_ids_for_topic(topic_id=topic_id)
+        allowed_chunk_ids = get_repo().list_chunk_ids_for_topic(topic_id=topic_id)
         if not allowed_chunk_ids:
             continue
-        centroid = store.db.get_topic_vector(topic_id=topic_id)
+        centroid = get_repo().get_topic_vector(topic_id=topic_id)
         context_pack = build_diverse_chunk_pack(
             store=store,
             chunk_ids=allowed_chunk_ids,

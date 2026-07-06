@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from app.api.endpoints import app
 from app.data.db_engine import drop_all_tables, init_db
 from app.data.vector_store import VectorStore
+from app.deps import get_repo
 from app.services.exams import ImmutableExamError, attach_documents, create_exam
 from app.services.ingestion import ingest_documents
 
@@ -30,7 +31,7 @@ class ImmutableExamGuardrailsTests(unittest.TestCase):
         self.store = VectorStore(basepath=str(_TEST_ROOT / "store"))
 
     def test_first_exam_ingest_is_allowed_but_second_is_blocked(self) -> None:
-        exam_id = create_exam(store=self.store, user_id="user-a", title="Phase 0 test")
+        exam_id = create_exam(repo=get_repo(), user_id="user-a", title="Phase 0 test")
         initial_doc = _write_text_doc("doc_initial.txt", "intro text for first ingest")
 
         first_results = ingest_documents(
@@ -40,7 +41,7 @@ class ImmutableExamGuardrailsTests(unittest.TestCase):
             exam_id=exam_id,
         )
         attach_documents(
-            store=self.store,
+            repo=get_repo(),
             exam_id=exam_id,
             doc_ids=[result.doc_id for result in first_results],
         )
@@ -55,13 +56,13 @@ class ImmutableExamGuardrailsTests(unittest.TestCase):
             )
 
     def test_second_attach_documents_call_is_rejected(self) -> None:
-        exam_id = create_exam(store=self.store, user_id="user-b", title="Attach guard test")
+        exam_id = create_exam(repo=get_repo(), user_id="user-b", title="Attach guard test")
         first_doc = _write_text_doc("attach_first.txt", "first attach content")
         second_doc = _write_text_doc("attach_second.txt", "second attach content")
 
         first_results = ingest_documents([first_doc], store=self.store)
         attach_documents(
-            store=self.store,
+            repo=get_repo(),
             exam_id=exam_id,
             doc_ids=[first_results[0].doc_id],
         )
@@ -69,7 +70,7 @@ class ImmutableExamGuardrailsTests(unittest.TestCase):
         second_results = ingest_documents([second_doc], store=self.store)
         with self.assertRaises(ImmutableExamError):
             attach_documents(
-                store=self.store,
+                repo=get_repo(),
                 exam_id=exam_id,
                 doc_ids=[second_results[0].doc_id],
             )

@@ -9,8 +9,9 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from app.data.db_repository import StoredChunk, StoredTopic
+from app.data.db_repository import DBRepository, StoredChunk, StoredTopic
 from app.data.vector_store import VectorStore
+from app.deps import get_repo, get_store
 from app.services.exams import load_exam
 from app.services.llm import CHAT_MODEL_FAST, chat_completions_create
 from app.utils.vectors import l2_normalize
@@ -679,6 +680,7 @@ def build_topics_for_exam(
     *,
     exam_id: str,
     store: Optional[VectorStore] = None,
+    repo: Optional[DBRepository] = None,
     overwrite: bool = True,
     seed: int = 0,
     use_llm_labels: bool = True,
@@ -696,15 +698,16 @@ def build_topics_for_exam(
     Build semantic topics for an exam by clustering chunk embeddings and producing grounded labels + evidence.
     Persists topics + topic_chunks + topic_evidence into SQLite.
     """
-    store = store or VectorStore()
+    store = store or get_store()
+    repo = repo or get_repo()
     # For Pinecone backend, topic building needs the exam namespace for vector fetches.
     if store.vector_backend == "pinecone":
-        exam_row = store.db.get_exam(exam_id)
+        exam_row = repo.get_exam(exam_id)
         if exam_row is None:
             raise ValueError(f"Exam not found: {exam_id}")
         from app.data.pinecone_backend import pinecone_namespace
-        store.set_namespace(pinecone_namespace(user_id=exam_row.user_id, exam_id=exam_id))
-    ws = load_exam(store=store, exam_id=exam_id)
+        store = store.for_namespace(pinecone_namespace(user_id=exam_row.user_id, exam_id=exam_id))
+    ws = load_exam(repo=repo, exam_id=exam_id)
     doc_ids = ws.doc_ids
     if not doc_ids:
         return []
@@ -803,7 +806,7 @@ def build_topics_for_exam(
         if rows:
             centroid = l2_normalize(np.mean(Xn[rows], axis=0, keepdims=True))[0]
             try:
-                store.db.upsert_topic_vector(topic_id=topic_id, vector=centroid)
+                repo.upsert_topic_vector(topic_id=topic_id, vector=centroid)
             except Exception:
                 pass
         info = {
@@ -857,17 +860,17 @@ def build_topics_for_exam(
 
     # 4) persist
     if overwrite:
-        store.db.delete_topics_for_exam(exam_id=exam_id)
+        repo.delete_topics_for_exam(exam_id=exam_id)
     for t in built:
-        store.db.upsert_topic(topic_id=t.topic_id, exam_id=exam_id, label=t.label, info=t.info)
-        store.db.replace_topic_chunks(topic_id=t.topic_id, chunk_ids=t.chunk_ids)
-        store.db.replace_topic_evidence(topic_id=t.topic_id, evidence=t.evidence)
+        repo.upsert_topic(topic_id=t.topic_id, exam_id=exam_id, label=t.label, info=t.info)
+        repo.replace_topic_chunks(topic_id=t.topic_id, chunk_ids=t.chunk_ids)
+        repo.replace_topic_evidence(topic_id=t.topic_id, evidence=t.evidence)
 
     return built
 
 
-def list_topics_for_exam(*, exam_id: str, store: Optional[VectorStore] = None) -> List[StoredTopic]:
-    store = store or VectorStore()
-    return store.db.list_topics(exam_id=exam_id)
+def list_topics_for_exam(*, exam_id: str, repo: Optional[DBRepository] = None) -> List[StoredTopic]:
+    repo = repo or get_repo()
+    return repo.list_topics(exam_id=exam_id)
 
 

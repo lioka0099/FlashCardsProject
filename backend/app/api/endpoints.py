@@ -32,8 +32,9 @@ from app.api.schemas import (
     TopicResponse,
 )
 from app.data.db_engine import get_db
+from app.data.db_repository import DBRepository
 from app.data.models import CardReview
-from app.data.vector_store import VectorStore
+from app.deps import get_repo, get_store
 from app.services.diagnostic_lifecycle import DiagnosticBootstrapError, DiagnosticLifecycleService
 from app.services.exams import ImmutableExamError
 from app.services.graph import generate_single_card
@@ -124,11 +125,11 @@ def _is_pdf_ref(ref: str) -> bool:
     return (ref or "").lower().split("?")[0].split("#")[0].rstrip().endswith(".pdf")
 
 
-def _card_to_response(store: VectorStore, card_id: str) -> Optional[CardResponse]:
-    card = store.db.get_card(card_id=card_id)
+def _card_to_response(repo: DBRepository, card_id: str) -> Optional[CardResponse]:
+    card = repo.get_card(card_id=card_id)
     if card is None:
         return None
-    topic_map = {t.topic_id: t.label for t in store.db.list_topics(exam_id=card.exam_id)}
+    topic_map = {t.topic_id: t.label for t in repo.list_topics(exam_id=card.exam_id)}
     proofs = [
         ProofSpan(
             proof_id=p.proof_id,
@@ -138,9 +139,9 @@ def _card_to_response(store: VectorStore, card_id: str) -> Optional[CardResponse
             end=p.end,
             text=p.text,
             score=float(p.score or 0.0),
-            is_pdf=_is_pdf_ref(store.db.get_document_path(doc_id=p.doc_id) or p.doc_id),
+            is_pdf=_is_pdf_ref(repo.get_document_path(doc_id=p.doc_id) or p.doc_id),
         )
-        for p in store.db.list_card_proofs(card_id=card.card_id)
+        for p in repo.list_card_proofs(card_id=card.card_id)
     ]
     return CardResponse(
         card_id=card.card_id,
@@ -199,13 +200,13 @@ async def create_exam_from_upload_endpoint(
             )
 
     temp_paths, filenames = _extract_uploaded_files(files)
-    store = VectorStore()
-    svc = DiagnosticLifecycleService(store=store)
+    repo = get_repo()
+    svc = DiagnosticLifecycleService(repo=repo)
     exam_id = svc.create_processing_exam(
         user_id=user_id, title=title, mode=mode,
         info={"source": "from_upload", "filenames": filenames},
     )
-    store.db.enqueue_job(
+    repo.enqueue_job(
         exam_id=exam_id,
         payload={"paths": [str(p) for p in temp_paths], "filenames": filenames,
                  "title": title, "mode": mode},
@@ -218,16 +219,16 @@ async def list_exams_endpoint(
     user_id: str = Query(...),
     limit: int = Query(default=50, ge=1, le=500),
 ):
-    store = VectorStore()
-    exams = store.db.list_exams(user_id=user_id, limit=limit)
+    repo = get_repo()
+    exams = repo.list_exams(user_id=user_id, limit=limit)
     exams = [x for x in exams if getattr(x, "state", None) != "failed"]
     return ExamListResponse(exams=[_exam_to_response(x) for x in exams])
 
 
 @app.get("/exams/{exam_id}")
 async def get_exam_endpoint(exam_id: str, user_id: str = Query(...)):
-    store = VectorStore()
-    exam = store.db.get_exam(exam_id)
+    repo = get_repo()
+    exam = repo.get_exam(exam_id)
     if exam is None:
         return JSONResponse({"error": f"Exam not found: {exam_id}"}, status_code=404)
     if exam.user_id != user_id:
@@ -250,8 +251,8 @@ async def get_exam_endpoint(exam_id: str, user_id: str = Query(...)):
 
 @app.get("/exams/{exam_id}/topics", response_model=TopicListResponse)
 async def list_topics_endpoint(exam_id: str):
-    store = VectorStore()
-    rows = store.db.list_topics(exam_id=exam_id)
+    repo = get_repo()
+    rows = repo.list_topics(exam_id=exam_id)
     topics: List[TopicResponse] = []
     for t in rows:
         topics.append(
@@ -269,25 +270,26 @@ async def list_topics_endpoint(exam_id: str):
 
 @app.post("/exams/{exam_id}/topics/{topic_id}/cards/generate", response_model=GenerateSingleCardResponse)
 async def generate_single_card_endpoint(exam_id: str, topic_id: str, req: GenerateSingleCardRequest):
-    store = VectorStore()
-    exam = store.db.get_exam(exam_id)
+    repo = get_repo()
+    store = get_store()
+    exam = repo.get_exam(exam_id)
     if exam is None:
         return GenerateSingleCardResponse(card=None, error=f"Exam not found: {exam_id}")
     if store.vector_backend == "pinecone":
-        namespace = f"u:{exam.user_id}|e:{exam_id}"
-        store.set_namespace(namespace)
-    topic_map = {t.topic_id: t for t in store.db.list_topics(exam_id=exam_id)}
+        store = store.for_namespace(f"u:{exam.user_id}|e:{exam_id}")
+    topic_map = {t.topic_id: t for t in repo.list_topics(exam_id=exam_id)}
     topic = topic_map.get(topic_id)
     if topic is None:
         return GenerateSingleCardResponse(card=None, error=f"Topic not found: {topic_id}")
-    chunk_ids = store.db.list_chunk_ids_for_topic(topic_id=topic_id)
+    chunk_ids = repo.list_chunk_ids_for_topic(topic_id=topic_id)
     if not chunk_ids:
         return GenerateSingleCardResponse(card=None, error="Topic has no chunks")
     try:
         context_pack = build_diverse_chunk_pack(
             store=store,
+            repo=repo,
             chunk_ids=chunk_ids,
-            centroid=store.db.get_topic_vector(topic_id=topic_id),
+            centroid=repo.get_topic_vector(topic_id=topic_id),
         )
         card = generate_single_card(
             exam_id=exam_id,
@@ -304,7 +306,7 @@ async def generate_single_card_endpoint(exam_id: str, topic_id: str, req: Genera
         return GenerateSingleCardResponse(card=None, error=str(exc))
     if card is None:
         return GenerateSingleCardResponse(card=None, error="Could not generate card")
-    payload = _card_to_response(store, card.card_id)
+    payload = _card_to_response(repo, card.card_id)
     return GenerateSingleCardResponse(card=payload, error=None)
 
 
@@ -313,11 +315,11 @@ async def list_cards_endpoint(
     exam_id: str,
     limit: int = Query(default=200, ge=1, le=1000),
 ):
-    store = VectorStore()
-    rows = store.db.list_cards_for_exam(exam_id=exam_id, limit=limit)
+    repo = get_repo()
+    rows = repo.list_cards_for_exam(exam_id=exam_id, limit=limit)
     cards: List[CardResponse] = []
     for row in rows:
-        payload = _card_to_response(store, row.card_id)
+        payload = _card_to_response(repo, row.card_id)
         if payload is not None:
             cards.append(payload)
     return CardListResponse(cards=cards, total=len(cards))
@@ -329,8 +331,9 @@ async def next_card_endpoint(
     background_tasks: BackgroundTasks,
     user_id: str = Query(...),
 ):
-    store = VectorStore()
-    exam = store.db.get_exam(exam_id)
+    repo = get_repo()
+    store = get_store()
+    exam = repo.get_exam(exam_id)
     if exam is None:
         return JSONResponse({"error": f"Exam not found: {exam_id}"}, status_code=404)
     if exam.user_id != user_id:
@@ -342,22 +345,22 @@ async def next_card_endpoint(
     # refetches on every mount). Without it, each spurious fetch records a "presented" row
     # and permanently advances the progression queue for a card the user never saw/rated,
     # producing the "Not rated" ghost cards in history.
-    session_state = store.db.get_exam_session_state(user_id=user_id, exam_id=exam_id)
+    session_state = repo.get_exam_session_state(user_id=user_id, exam_id=exam_id)
     last_served_id = session_state.last_served_card_id if session_state else None
     if last_served_id:
-        last_card = store.db.get_card(card_id=last_served_id)
+        last_card = repo.get_card(card_id=last_served_id)
         if last_card is not None and last_card.status == "active":
             reviewed = _latest_review_info_by_card(
                 user_id=user_id, exam_id=exam_id, card_ids=[last_served_id]
             )
             if last_served_id not in reviewed:
-                card = _card_to_response(store, last_served_id)
+                card = _card_to_response(repo, last_served_id)
                 return NextCardResponse(
                     card=card, reason="resumed", no_cards_available=False, message=None
                 )
 
-    planner = SessionPlannerService(repo=store.db)
-    generator = SessionCardGenerationService(repo=store.db)
+    planner = SessionPlannerService(repo=repo)
+    generator = SessionCardGenerationService(repo=repo)
     generator.archive_invalid_prefetched_cards(user_id=user_id, exam_id=exam_id)
     planned = planner.plan_next_card(user_id=user_id, exam_id=exam_id)
     if planned is None:
@@ -370,13 +373,13 @@ async def next_card_endpoint(
         generator.mark_prefetched_card_served(card_id=planned.card_id, user_id=user_id)
 
     now = datetime.now(timezone.utc)
-    store.db.upsert_exam_session_state(
+    repo.upsert_exam_session_state(
         user_id=user_id,
         exam_id=exam_id,
         last_served_card_id=planned.card_id,
         last_presented_at=now,
     )
-    store.db.append_card_presentation(
+    repo.append_card_presentation(
         user_id=user_id,
         exam_id=exam_id,
         card_id=planned.card_id,
@@ -388,24 +391,24 @@ async def next_card_endpoint(
         user_id=user_id,
         exam_id=exam_id,
     )
-    card = _card_to_response(store, planned.card_id)
+    card = _card_to_response(repo, planned.card_id)
     return NextCardResponse(card=card, reason=planned.reason, no_cards_available=False, message=None)
 
 
 @app.get("/exams/{exam_id}/session/previous-card", response_model=NextCardResponse)
 async def previous_card_endpoint(exam_id: str, user_id: str = Query(...)):
-    store = VectorStore()
-    latest = store.db.get_latest_presentation(user_id=user_id, exam_id=exam_id)
+    repo = get_repo()
+    latest = repo.get_latest_presentation(user_id=user_id, exam_id=exam_id)
     if latest is None:
         return NextCardResponse(card=None, reason=None, no_cards_available=True, message="No previous card")
-    prev = store.db.get_previous_presentation(
+    prev = repo.get_previous_presentation(
         user_id=user_id,
         exam_id=exam_id,
         current_sequence_no=latest.sequence_no,
     )
     if prev is None:
         return NextCardResponse(card=None, reason=None, no_cards_available=True, message="No previous card")
-    card = _card_to_response(store, prev.card_id)
+    card = _card_to_response(repo, prev.card_id)
     return NextCardResponse(card=card, reason="previous", no_cards_available=False, message=None)
 
 
@@ -415,8 +418,8 @@ async def presented_history_endpoint(
     user_id: str = Query(...),
     limit: int = Query(default=500, ge=1, le=1000),
 ):
-    store = VectorStore()
-    rows = store.db.list_presentations(user_id=user_id, exam_id=exam_id, ascending=False, limit=limit)
+    repo = get_repo()
+    rows = repo.list_presentations(user_id=user_id, exam_id=exam_id, ascending=False, limit=limit)
     learning_rows = []
     seen_card_ids = set()
     learning_reasons = {"diagnostic", "overdue", "remediation", "progression", "generated", "prefetched"}
@@ -437,7 +440,7 @@ async def presented_history_endpoint(
     )
     cards: List[CardResponse] = []
     for row in learning_rows:
-        payload = _card_to_response(store, row.card_id)
+        payload = _card_to_response(repo, row.card_id)
         if payload is not None:
             info = dict(payload.info or {})
             review_info = latest_reviews.get(row.card_id)
@@ -465,17 +468,17 @@ async def presented_history_endpoint(
 
 @app.get("/documents/{doc_id}/source")
 async def document_source_endpoint(doc_id: str, exam_id: str = Query(...), user_id: str = Query(...)):
-    store = VectorStore()
-    exam = store.db.get_exam(exam_id)
+    repo = get_repo()
+    exam = repo.get_exam(exam_id)
     if exam is None:
         return JSONResponse({"error": f"Exam not found: {exam_id}"}, status_code=404)
     if exam.user_id != user_id:
         return JSONResponse({"error": "Exam does not belong to user"}, status_code=403)
-    exam_doc_ids = set(store.db.list_exam_documents(exam_id=exam_id))
+    exam_doc_ids = set(repo.list_exam_documents(exam_id=exam_id))
     if doc_id not in exam_doc_ids:
         return JSONResponse({"error": f"Document not found in exam: {doc_id}"}, status_code=404)
 
-    doc_path = store.db.get_document_path(doc_id=doc_id)
+    doc_path = repo.get_document_path(doc_id=doc_id)
     if not doc_path:
         return JSONResponse({"error": f"Document path not found: {doc_id}"}, status_code=404)
     source_path = Path(doc_path)
@@ -564,8 +567,8 @@ async def review_card_endpoint(
 
 @app.post("/exams/{exam_id}/session/event", response_model=SessionEventResponse)
 async def session_event_endpoint(exam_id: str, req: SessionEventRequest):
-    store = VectorStore()
-    event_id = store.db.add_event(
+    repo = get_repo()
+    event_id = repo.add_event(
         user_id=req.user_id,
         exam_id=exam_id,
         type=req.event_type,
@@ -576,9 +579,9 @@ async def session_event_endpoint(exam_id: str, req: SessionEventRequest):
 
 @app.get("/exams/{exam_id}/progress", response_model=TopicProgressResponse)
 async def topic_progress_endpoint(exam_id: str, user_id: str = Query(...)):
-    store = VectorStore()
-    topics = {t.topic_id: t for t in store.db.list_topics(exam_id=exam_id)}
-    prof_rows = store.db.list_topic_proficiencies(user_id=user_id, exam_id=exam_id)
+    repo = get_repo()
+    topics = {t.topic_id: t for t in repo.list_topics(exam_id=exam_id)}
+    prof_rows = repo.list_topic_proficiencies(user_id=user_id, exam_id=exam_id)
     payload: List[TopicProficiencyResponse] = []
     for p in prof_rows:
         payload.append(

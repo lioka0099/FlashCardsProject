@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from pathlib import Path
 from typing import Optional
 
 from app.data.db_repository import DBRepository
+from app.deps import get_repo
 from app.services.diagnostic_lifecycle import DiagnosticLifecycleService
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ def _cleanup_paths(paths) -> None:
 
 
 def run_once(repo: Optional[DBRepository] = None) -> bool:
-    repo = repo or DBRepository(Path("store/meta.sqlite"))
+    repo = repo or get_repo()
     job = repo.claim_next_job()
     if job is None:
         return False
@@ -45,7 +45,7 @@ def run_once(repo: Optional[DBRepository] = None) -> bool:
 
 
 def worker_loop(stop_event: threading.Event, *, poll_interval: float = 1.0) -> None:
-    repo = DBRepository(Path("store/meta.sqlite"))
+    repo = get_repo()
     while not stop_event.is_set():
         try:
             did_work = run_once(repo)

@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from app.api.endpoints import app
 from app.data.db_engine import drop_all_tables, init_db
 from app.data.vector_store import VectorStore
+from app.deps import get_repo
 from app.services.exams import create_exam
 from app.services.graph import GeneratedCard
 
@@ -62,8 +63,8 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         original_generate = dl_mod.generate_starter_cards_v2
 
         def fake_build_topics_for_exam(*, exam_id, store, overwrite=True):
-            store.db.upsert_topic(topic_id="tA", exam_id=exam_id, label="Topic A", info={"n_chunks": 1})
-            store.db.upsert_topic(topic_id="tB", exam_id=exam_id, label="Topic B", info={"n_chunks": 1})
+            get_repo().upsert_topic(topic_id="tA", exam_id=exam_id, label="Topic A", info={"n_chunks": 1})
+            get_repo().upsert_topic(topic_id="tB", exam_id=exam_id, label="Topic B", info={"n_chunks": 1})
             return [
                 {"topic_id": "tA", "label": "Topic A"},
                 {"topic_id": "tB", "label": "Topic B"},
@@ -74,7 +75,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
             cards = []
             for i, tid in enumerate(["tA", "tB"][:n], start=1):
                 cid = f"diag_card_{i}"
-                store.db.upsert_card(
+                get_repo().upsert_card(
                     card_id=cid,
                     exam_id=exam_id,
                     topic_id=tid,
@@ -85,7 +86,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
                     status="active",
                     info={"source": "test"},
                 )
-                store.db.replace_card_topics(
+                get_repo().replace_card_topics(
                     card_id=cid,
                     topics=[{"topic_id": tid, "role": "primary", "weight": 1.0}],
                 )
@@ -163,14 +164,14 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         captured = {}
 
         def fake_build_topics_for_exam(*, exam_id, store, overwrite=True):
-            exam = store.db.get_exam(exam_id)
+            exam = get_repo().get_exam(exam_id)
             captured["math_profile"] = (exam.info or {}).get("math_profile") if exam else None
-            store.db.upsert_topic(topic_id="tA", exam_id=exam_id, label="Topic A", info={"n_chunks": 1})
+            get_repo().upsert_topic(topic_id="tA", exam_id=exam_id, label="Topic A", info={"n_chunks": 1})
             return [{"topic_id": "tA", "label": "Topic A"}]
 
         def fake_generate_starter_cards_v2(*, exam_id, user_id, n, difficulty, card_type="learning", store=None, max_workers=5):
             assert store is not None
-            store.db.upsert_card(
+            get_repo().upsert_card(
                 card_id="diag_card_profile",
                 exam_id=exam_id,
                 topic_id="tA",
@@ -181,7 +182,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
                 status="active",
                 info={"source": "test"},
             )
-            store.db.replace_card_topics(
+            get_repo().replace_card_topics(
                 card_id="diag_card_profile",
                 topics=[{"topic_id": "tA", "role": "primary", "weight": 1.0}],
             )
@@ -220,8 +221,8 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         original_generate = dl_mod.generate_starter_cards_v2
 
         def fake_build_topics_for_exam(*, exam_id, store, overwrite=True):
-            store.db.upsert_topic(topic_id="tA", exam_id=exam_id, label="Topic A", info={"n_chunks": 1})
-            store.db.upsert_topic(topic_id="tB", exam_id=exam_id, label="Topic B", info={"n_chunks": 1})
+            get_repo().upsert_topic(topic_id="tA", exam_id=exam_id, label="Topic A", info={"n_chunks": 1})
+            get_repo().upsert_topic(topic_id="tB", exam_id=exam_id, label="Topic B", info={"n_chunks": 1})
             return [
                 {"topic_id": "tA", "label": "Topic A"},
                 {"topic_id": "tB", "label": "Topic B"},
@@ -231,7 +232,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
             assert store is not None
             # Generate fewer cards than topics to force failure.
             cid = "diag_card_partial"
-            store.db.upsert_card(
+            get_repo().upsert_card(
                 card_id=cid,
                 exam_id=exam_id,
                 topic_id="tA",
@@ -242,7 +243,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
                 status="active",
                 info={"source": "test"},
             )
-            store.db.replace_card_topics(
+            get_repo().replace_card_topics(
                 card_id=cid,
                 topics=[{"topic_id": "tA", "role": "primary", "weight": 1.0}],
             )
@@ -270,7 +271,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
                     info={"source": "from_upload", "filenames": ["p3_bootstrap_fail.txt"]})
 
             store = VectorStore(basepath=str(_TEST_ROOT / "store"))
-            exams = store.db.list_exams(user_id="u2")
+            exams = get_repo().list_exams(user_id="u2")
             self.assertEqual(len(exams), 0)
         finally:
             dl_mod.build_topics_for_exam = original_build_topics
@@ -285,7 +286,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         def fake_build_topics_for_exam(*, exam_id, store, overwrite=True):
             topic_ids = ["tA", "tB", "tC", "tD", "tE"]
             for tid in topic_ids:
-                store.db.upsert_topic(topic_id=tid, exam_id=exam_id, label=f"Topic {tid}", info={"n_chunks": 1})
+                get_repo().upsert_topic(topic_id=tid, exam_id=exam_id, label=f"Topic {tid}", info={"n_chunks": 1})
             return [{"topic_id": tid, "label": f"Topic {tid}"} for tid in topic_ids]
 
         def fake_generate_partial_but_ok(*, exam_id, user_id, n, difficulty, card_type="learning", store=None, max_workers=5):
@@ -294,7 +295,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
             # 4/5 coverage = 80% and should be accepted.
             for i, tid in enumerate(["tA", "tB", "tC", "tD"], start=1):
                 cid = f"diag_card_{i}"
-                store.db.upsert_card(
+                get_repo().upsert_card(
                     card_id=cid,
                     exam_id=exam_id,
                     topic_id=tid,
@@ -305,7 +306,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
                     status="active",
                     info={"source": "test"},
                 )
-                store.db.replace_card_topics(
+                get_repo().replace_card_topics(
                     card_id=cid,
                     topics=[{"topic_id": tid, "role": "primary", "weight": 1.0}],
                 )

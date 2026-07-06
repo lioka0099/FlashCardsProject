@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from app.data.db_repository import DBRepository, StoredCard, StoredCardPresentation
+from app.deps import get_repo
 from app.services.diagnostic_coverage import all_topics_diagnosed, diagnosed_topic_ids
 
 
@@ -27,7 +27,7 @@ class SessionPlannerService:
         repo: Optional[DBRepository] = None,
         max_consecutive_topic_cards: int = 2,
     ) -> None:
-        self.repo = repo or DBRepository(Path("store/meta.sqlite"))
+        self.repo = repo or get_repo()
         self.max_consecutive_topic_cards = max(1, int(max_consecutive_topic_cards))
 
     def plan_next_card(

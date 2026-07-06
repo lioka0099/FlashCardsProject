@@ -3,6 +3,7 @@ from typing import List, Dict, Tuple, Optional, Sequence
 import numpy as np
 from app.services.llm import CHAT_MODEL_FAST, chat_completions_create, embed_query, embed_texts
 from app.data.vector_store import VectorStore, StoredChunk
+from app.deps import get_store
 from app.api.schemas import ProofSpan
 
 @dataclass
@@ -156,7 +157,7 @@ def retrieve_with_proofs(
     allowed_chunk_ids: Optional[Sequence[str]] = None,
     query_vec: Optional[np.ndarray] = None,
 ) -> List[ProofSpan]:
-    store = store or VectorStore()
+    store = store or get_store()
     allowed_chunks = {c for c in (allowed_chunk_ids or []) if c} if allowed_chunk_ids else None
     # If we need to filter by chunk_id, ask for a bigger pool first to avoid starving after filtering.
     pool_k = k

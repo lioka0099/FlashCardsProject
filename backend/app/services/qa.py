@@ -7,6 +7,7 @@ from app.services.llm import CHAT_MODEL, CHAT_MODEL_FAST, chat_completions_creat
 from app.services.math_formatting import MATH_DISPLAY_INSTRUCTION
 from app.services.retrieval import retrieve_with_proofs
 from app.data.vector_store import VectorStore
+from app.deps import get_store
 from app.api.schemas import ProofSpan
 
 @dataclass
@@ -359,7 +360,7 @@ def generate_answer(
     """
     # 1) retrieve
     allowed_set = {doc for doc in (allowed_doc_ids or []) if doc}
-    store_obj = store or VectorStore()
+    store_obj = store or get_store()
     target_pool = max(pool_k or k, k)
     if prefetched_pool is not None:
         proofs_all = list(prefetched_pool)

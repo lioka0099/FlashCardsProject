@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Dict, Optional
 
 from sqlalchemy.orm import Session
@@ -13,6 +12,7 @@ from app.data.db_repository import (
     StoredCardTopic,
     StoredTopicProficiency,
 )
+from app.deps import get_repo
 from app.services.card_scheduling_state import CardSchedulingStateService
 from app.services.topic_proficiency_state import TopicProficiencyStateService
 
@@ -41,7 +41,7 @@ class ReviewStateReducer:
         scheduling_service: Optional[CardSchedulingStateService] = None,
         proficiency_service: Optional[TopicProficiencyStateService] = None,
     ) -> None:
-        self.repo = repo or DBRepository(Path("store/meta.sqlite"))
+        self.repo = repo or get_repo()
         self.scheduling_service = scheduling_service or CardSchedulingStateService()
         self.proficiency_service = proficiency_service or TopicProficiencyStateService()
 

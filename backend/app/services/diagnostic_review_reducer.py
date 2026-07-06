@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from app.data.db_engine import get_db
 from app.data.db_repository import DBRepository, StoredCardTopic, StoredTopicProficiency
+from app.deps import get_repo
 from app.services.diagnostic_coverage import all_topics_diagnosed
 from app.services.diagnostic_state import DiagnosticStateService
 
@@ -36,7 +36,7 @@ class DiagnosticReviewReducer:
         repo: Optional[DBRepository] = None,
         diagnostic_service: Optional[DiagnosticStateService] = None,
     ) -> None:
-        self.repo = repo or DBRepository(Path("store/meta.sqlite"))
+        self.repo = repo or get_repo()
         self.diagnostic_service = diagnostic_service or DiagnosticStateService()
 
     def apply_review(

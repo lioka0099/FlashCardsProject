@@ -2,10 +2,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple, Sequence, Optional
+import copy
 import os
 import numpy as np
 from app.data.db_repository import DBRepository, StoredChunk
 from app.data.pinecone_backend import PineconeClient
+
+
+def _require_namespace(namespace: Optional[str], op: str) -> str:
+    if not namespace:
+        raise RuntimeError(
+            f"VectorStore.{op} requires a namespace. For the Pinecone backend, pass "
+            "namespace=pinecone_namespace(user_id=..., exam_id=...); retrieval is exam-scoped."
+        )
+    return namespace
 
 VEC_DIM = 3072  # OpenAI text-embedding-3-large
 
@@ -65,26 +75,37 @@ class _NumpyIPIndex:
 
 
 class VectorStore:
-    def __init__(self, basepath: str = "store"):
+    def __init__(self, basepath: str = "store", *, repo: Optional[DBRepository] = None):
         self.base = Path(basepath)
         self.base.mkdir(parents=True, exist_ok=True)
-        
-        # Initialize the Metadata Store (SQLite)
-        self.db = DBRepository(self.base / "meta.sqlite")
+
+        # Metadata store (SQLite). Injected by the wiring seam (app/deps.py) so the
+        # store and the persistence repo share one instance; kept private so callers
+        # depend on VectorStore for vectors and on the repo for persistence, never
+        # reaching through the store into the database.
+        self._repo = repo or DBRepository(self.base / "meta.sqlite")
 
         # Vector backend selection (default keeps current behavior)
         self.vector_backend: str = os.getenv("VECTOR_BACKEND", "pinecone").strip().lower()
-        # Pinecone namespace must be set by exam-scoped flows.
-        self.namespace: Optional[str] = None
         self._pinecone: Optional[PineconeClient] = None
-        
+
+        # Exam namespace. None on the shared instance (which holds no request state, so it's
+        # safe to share across requests); bound only on the immutable copies returned by
+        # for_namespace(). Vector methods resolve namespace from their arg or this field.
+        self._namespace: Optional[str] = None
+
         # Local fallback index (numpy-only). Pinecone is the primary backend when configured.
         self.vectors_path = self.base / "vectors.npy"
         self.index = _NumpyIPIndex(VEC_DIM, self.vectors_path)
         self.vector_dimension = VEC_DIM
 
-    def set_namespace(self, namespace: Optional[str]) -> None:
-        self.namespace = namespace
+    def for_namespace(self, namespace: str) -> "VectorStore":
+        """Return an exam-scoped view. It's a shallow copy that shares the repo, index and
+        Pinecone client with this instance and only binds the namespace, so the shared store
+        is never mutated and the namespace rides on the object down any retrieval chain."""
+        scoped = copy.copy(self)
+        scoped._namespace = namespace
+        return scoped
 
     def _pinecone_client(self) -> PineconeClient:
         if self._pinecone is None:
@@ -96,22 +117,24 @@ class VectorStore:
 
     # ------ write ------
     def add_document(self, doc_id: str, path: str, title: str, info: dict):
-        self.db.add_document(doc_id, path, title, info)
+        self._repo.add_document(doc_id, path, title, info)
 
-    def add_chunks(self, chunk_rows: Iterable[StoredChunk], vectors: np.ndarray):
+    def add_chunks(
+        self,
+        chunk_rows: Iterable[StoredChunk],
+        vectors: np.ndarray,
+        *,
+        namespace: Optional[str] = None,
+    ):
         # Materialize to preserve insertion order for vector_index_map.
         chunk_list = list(chunk_rows)
 
         # 1) Save metadata to SQL
-        self.db.add_chunks(chunk_list)
+        self._repo.add_chunks(chunk_list)
 
-        # 2a) Pinecone backend: upsert vectors by chunk_id into current namespace.
+        # 2a) Pinecone backend: upsert vectors by chunk_id into the exam-scoped namespace.
         if self.vector_backend == "pinecone":
-            if not self.namespace:
-                raise RuntimeError(
-                    "VectorStore.namespace not set. For Pinecone backend you must call "
-                    "store.set_namespace('u:{user_id}|e:{exam_id}') before add_chunks()."
-                )
+            ns = _require_namespace(namespace or self._namespace, "add_chunks")
             if vectors.dtype != np.float32:
                 vectors = vectors.astype("float32")
             pc = self._pinecone_client()
@@ -124,14 +147,17 @@ class VectorStore:
                 }
             pc.upsert(
                 index=pc.chunks,
-                namespace=self.namespace,
+                namespace=ns,
                 vectors=[(ch.chunk_id, vec) for ch, vec in zip(chunk_list, vectors)],
                 metadata_by_id=meta_by_id,
                 batch_size=100,
             )
             return
 
-        # 2) Local fallback: add vectors to numpy index + persist stable mapping
+        # 2) Local fallback: add vectors to numpy index + persist stable mapping.
+        # ponytail: shared in-memory numpy index — concurrent add_chunks in local-backend
+        # mode race on self.index/vectors.npy. Pinecone (the default) sidesteps this. Add a
+        # global index lock only if you ever run VECTOR_BACKEND=local under concurrency.
         if vectors.dtype != np.float32:
             vectors = vectors.astype("float32")
 
@@ -139,25 +165,26 @@ class VectorStore:
         self.index.add(vectors)
 
         # Persist mapping from vector positions -> chunk_id for stable retrieval
-        self.db.add_vector_index_mapping(
+        self._repo.add_vector_index_mapping(
             start_index=start_index,
             chunk_ids=[c.chunk_id for c in chunk_list],
         )
 
     # ------ read/search ------
-    def topk(self, query_vec: np.ndarray, k: int = 5) -> List[Tuple[StoredChunk, float]]:
+    def topk(
+        self,
+        query_vec: np.ndarray,
+        k: int = 5,
+        *,
+        namespace: Optional[str] = None,
+    ) -> List[Tuple[StoredChunk, float]]:
         # Pinecone path: return (chunk, score) by querying chunk_id vectors.
         if self.vector_backend == "pinecone":
-            if not self.namespace:
-                # Fail fast: Pinecone is exam-scoped by namespace.
-                raise RuntimeError(
-                    "VectorStore.namespace not set. For Pinecone backend you must call "
-                    "store.set_namespace('u:{user_id}|e:{exam_id}') before retrieval."
-                )
+            ns = _require_namespace(namespace or self._namespace, "topk")
             pc = self._pinecone_client()
             matches = pc.query(
                 index=pc.chunks,
-                namespace=self.namespace,
+                namespace=ns,
                 query_vec=query_vec,
                 top_k=int(k),
                 filter=None,
@@ -165,7 +192,7 @@ class VectorStore:
             if not matches:
                 return []
             chunk_ids = [cid for cid, _ in matches]
-            by_id = self.db.get_chunks_by_ids(chunk_ids)
+            by_id = self._repo.get_chunks_by_ids(chunk_ids)
             out: List[Tuple[StoredChunk, float]] = []
             for cid, score in matches:
                 ch = by_id.get(cid)
@@ -184,13 +211,18 @@ class VectorStore:
         for idx, score in zip(I[0].tolist(), D[0].tolist()):
             if idx < 0: continue
             
-            chunk = self.db.get_chunk_by_vector_index(idx)
+            chunk = self._repo.get_chunk_by_vector_index(idx)
             if not chunk: continue
-            
+
             out.append((chunk, float(score)))
         return out
 
-    def get_vectors_for_chunk_ids(self, chunk_ids: Sequence[str]) -> Tuple[List[str], np.ndarray]:
+    def get_vectors_for_chunk_ids(
+        self,
+        chunk_ids: Sequence[str],
+        *,
+        namespace: Optional[str] = None,
+    ) -> Tuple[List[str], np.ndarray]:
         """
         Fetch vectors (in embedding space) for the given chunk_ids.
         Returns (resolved_chunk_ids_in_order, vectors[N, dim]).
@@ -198,18 +230,14 @@ class VectorStore:
         Notes:
         - Requires vector_index_map entries; for older stores, missing chunk_ids are skipped.
         """
-        # Pinecone path: fetch vectors by chunk_id from the current namespace.
+        # Pinecone path: fetch vectors by chunk_id from the exam-scoped namespace.
         if self.vector_backend == "pinecone":
-            if not self.namespace:
-                raise RuntimeError(
-                    "VectorStore.namespace not set. For Pinecone backend you must call "
-                    "store.set_namespace('u:{user_id}|e:{exam_id}') before get_vectors_for_chunk_ids()."
-                )
+            ns = _require_namespace(namespace or self._namespace, "get_vectors_for_chunk_ids")
             ids = [c for c in chunk_ids if c]
             if not ids:
                 return [], np.zeros((0, self.vector_dimension), dtype="float32")
             pc = self._pinecone_client()
-            fetched = pc.fetch_vectors(index=pc.chunks, namespace=self.namespace, ids=ids)
+            fetched = pc.fetch_vectors(index=pc.chunks, namespace=ns, ids=ids)
             resolved_ids = [cid for cid in ids if cid in fetched]
             if not resolved_ids:
                 return [], np.zeros((0, self.vector_dimension), dtype="float32")
@@ -219,7 +247,7 @@ class VectorStore:
         ids = [c for c in chunk_ids if c]
         if not ids:
             return [], np.zeros((0, self.vector_dimension), dtype="float32")
-        mapping = self.db.list_vector_indices_by_chunk_ids(ids)
+        mapping = self._repo.list_vector_indices_by_chunk_ids(ids)
         resolved: List[Tuple[str, int]] = [(cid, mapping[cid]) for cid in ids if cid in mapping]
         if not resolved:
             return [], np.zeros((0, self.vector_dimension), dtype="float32")
@@ -241,7 +269,7 @@ class VectorStore:
 
     # ------ doc helpers ------
     def list_chunks_by_doc(self, doc_id: str) -> List[StoredChunk]:
-        return self.db.list_chunks_by_doc(doc_id)
+        return self._repo.list_chunks_by_doc(doc_id)
 
     def sample_chunks_by_doc(self, doc_id: str, n: int = 20) -> List[StoredChunk]:
         import random
@@ -254,7 +282,7 @@ class VectorStore:
 
     # ------ cache helpers ------
     def get_cached_embeddings(self, hashes: List[str]) -> Dict[str, np.ndarray]:
-        return self.db.get_cached_embeddings(hashes)
+        return self._repo.get_cached_embeddings(hashes)
 
     def add_cached_embeddings(self, mapping: Dict[str, np.ndarray]) -> None:
-        return self.db.add_cached_embeddings(mapping)
+        return self._repo.add_cached_embeddings(mapping)

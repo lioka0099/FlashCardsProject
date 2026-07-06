@@ -105,16 +105,16 @@ class UniquenessGateTests(unittest.TestCase):
         state["card_route"] = "math_calculation"
         state["question"] = "Differentiate x**2 with respect to x."
 
-        class _FakeDB:
+        class _FakeRepo:
             @staticmethod
             def has_equivalent_question_text(*, exam_id, question_text):
                 return True
 
-        class _FakeStore:
-            def __init__(self, **_kwargs):
-                self.db = _FakeDB()
+            @staticmethod
+            def list_math_fingerprints_for_exam(*, exam_id, limit=200):
+                return []
 
-        with patch("app.services.graph.VectorStore", _FakeStore):
+        with patch("app.services.graph.get_repo", lambda: _FakeRepo()):
             out = node_check_uniqueness(state)
         self.assertFalse(out["is_unique"])
 

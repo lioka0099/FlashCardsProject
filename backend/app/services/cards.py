@@ -4,7 +4,9 @@ import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.data.db_repository import DBRepository
 from app.data.vector_store import VectorStore
+from app.deps import get_repo, get_store
 from app.services.llm import CHAT_MODEL_FAST, chat_completions_create
 from app.services.math_formatting import MATH_DISPLAY_INSTRUCTION
 
@@ -62,7 +64,7 @@ def _safe_json_load(s: str) -> Dict[str, Any]:
 def pick_starter_topics(
     *,
     exam_id: str,
-    store: Optional[VectorStore] = None,
+    repo: Optional[DBRepository] = None,
     n: int = 5,
 ) -> List[Tuple[str, str]]:
     """
@@ -70,8 +72,8 @@ def pick_starter_topics(
     Current heuristic: highest n_chunks (stored in topics.info) first.
     Returns [(topic_id, label), ...].
     """
-    store = store or VectorStore()
-    topics = store.db.list_topics(exam_id=exam_id)
+    repo = repo or get_repo()
+    topics = repo.list_topics(exam_id=exam_id)
     scored: List[Tuple[int, str, str]] = []
     for t in topics:
         n_chunks = int(t.info.get("n_chunks") or 0)
@@ -209,9 +211,9 @@ def generate_starter_cards(
     Requires topics to exist (call build_topics_for_exam() first).
     """
     from app.services.graph import generate_starter_cards_v2
-    
-    store = store or VectorStore()
-    
+
+    store = store or get_store()
+
     return generate_starter_cards_v2(
         exam_id=exam_id,
         user_id=user_id,

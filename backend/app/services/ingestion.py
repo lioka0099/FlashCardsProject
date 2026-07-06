@@ -10,6 +10,7 @@ import numpy as np
 
 from app.data.vector_store import StoredChunk, VectorStore
 from app.data.pinecone_backend import pinecone_namespace
+from app.deps import get_repo, get_store
 from app.services.exams import ensure_exam_ingest_allowed
 from app.services.llm import EMBED_MODEL, embed_texts
 from app.utils.chunking import Chunk, make_chunks
@@ -153,7 +154,7 @@ def _ingest_single(
             raise RuntimeError(
                 "Pinecone backend requires exam-scoped ingestion: provide user_id and exam_id."
             )
-        store.set_namespace(pinecone_namespace(user_id=user_id, exam_id=exam_id))
+        store = store.for_namespace(pinecone_namespace(user_id=user_id, exam_id=exam_id))
     store.add_chunks(stored, vectors)
     logger.info("Finished ingestion for %s (doc_id=%s)", path, doc_id)
 
@@ -170,9 +171,9 @@ def ingest_documents(
     if not paths:
         logger.info("No paths provided for ingestion; skipping")
         return []
-    store = store or VectorStore()
+    store = store or get_store()
     if exam_id:
-        ensure_exam_ingest_allowed(store=store, exam_id=exam_id)
+        ensure_exam_ingest_allowed(repo=get_repo(), exam_id=exam_id)
     results: List[IngestResult] = []
     for path in paths:
         results.append(_ingest_single(path, store, user_id=user_id, exam_id=exam_id))

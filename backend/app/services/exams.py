@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
-from app.data.vector_store import VectorStore
-from app.data.db_repository import StoredExam
+from app.data.db_repository import DBRepository, StoredExam
+from app.deps import get_repo
 
 
 @dataclass
@@ -35,19 +35,19 @@ class ImmutableExamError(ValueError):
 
 def create_exam(
     *,
-    store: Optional[VectorStore] = None,
+    repo: Optional[DBRepository] = None,
     user_id: str,
     title: str,
     mode: str = "mastery",
     info: Optional[Dict[str, Any]] = None,
 ) -> str:
-    store = store or VectorStore()
-    return store.db.create_exam(user_id=user_id, title=title, mode=mode, info=info)
+    repo = repo or get_repo()
+    return repo.create_exam(user_id=user_id, title=title, mode=mode, info=info)
 
 
 def ensure_exam_ingest_allowed(
     *,
-    store: Optional[VectorStore] = None,
+    repo: Optional[DBRepository] = None,
     exam_id: str,
 ) -> None:
     """
@@ -55,44 +55,44 @@ def ensure_exam_ingest_allowed(
     - first bootstrap ingest is allowed when exam has no attached docs
     - re-ingest / add-documents on existing exam is rejected
     """
-    store = store or VectorStore()
-    exam = store.db.get_exam(exam_id)
+    repo = repo or get_repo()
+    exam = repo.get_exam(exam_id)
     if exam is None:
         raise ValueError(f"Exam not found: {exam_id}")
-    existing_doc_ids = store.db.list_exam_documents(exam_id=exam_id)
+    existing_doc_ids = repo.list_exam_documents(exam_id=exam_id)
     if existing_doc_ids:
         raise ImmutableExamError(exam_id=exam_id)
 
 
-def load_exam(*, store: Optional[VectorStore] = None, exam_id: str) -> ExamWorkspace:
-    store = store or VectorStore()
-    exam = store.db.get_exam(exam_id)
+def load_exam(*, repo: Optional[DBRepository] = None, exam_id: str) -> ExamWorkspace:
+    repo = repo or get_repo()
+    exam = repo.get_exam(exam_id)
     if exam is None:
         raise ValueError(f"Exam not found: {exam_id}")
-    doc_ids = store.db.list_exam_documents(exam_id=exam_id)
+    doc_ids = repo.list_exam_documents(exam_id=exam_id)
     return ExamWorkspace(exam=exam, doc_ids=doc_ids)
 
 
 def attach_documents(
     *,
-    store: Optional[VectorStore] = None,
+    repo: Optional[DBRepository] = None,
     exam_id: str,
     doc_ids: Sequence[str],
 ) -> None:
-    store = store or VectorStore()
-    ensure_exam_ingest_allowed(store=store, exam_id=exam_id)
-    store.db.attach_documents_to_exam(exam_id=exam_id, doc_ids=doc_ids)
+    repo = repo or get_repo()
+    ensure_exam_ingest_allowed(repo=repo, exam_id=exam_id)
+    repo.attach_documents_to_exam(exam_id=exam_id, doc_ids=doc_ids)
 
 
 def log_event(
     *,
-    store: Optional[VectorStore] = None,
+    repo: Optional[DBRepository] = None,
     user_id: str,
     exam_id: str,
     type: str,
     payload: Optional[Dict[str, Any]] = None,
 ) -> str:
-    store = store or VectorStore()
-    return store.db.add_event(user_id=user_id, exam_id=exam_id, type=type, payload=payload)
+    repo = repo or get_repo()
+    return repo.add_event(user_id=user_id, exam_id=exam_id, type=type, payload=payload)
 
 

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import List, Optional, Set
 
 from app.data.db_repository import DBRepository, StoredTopic
+from app.deps import get_repo
 
 
 def diagnosed_topic_ids(
@@ -43,4 +43,4 @@ def all_topics_diagnosed(
 
 
 def default_repo() -> DBRepository:
-    return DBRepository(Path("store/meta.sqlite"))
+    return get_repo()

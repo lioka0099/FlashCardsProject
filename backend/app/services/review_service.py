@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Optional
 
 from app.data.db_repository import DBRepository
+from app.deps import get_repo
 from app.services.diagnostic_review_reducer import DiagnosticReviewReducer
 from app.services.review_state_reducer import ReviewStateReducer
 from app.services.student_memory import StudentMemoryService
@@ -38,7 +38,7 @@ class ReviewService:
         active_reducer: Optional[ReviewStateReducer] = None,
         student_memory: Optional[StudentMemoryService] = None,
     ) -> None:
-        self.repo = repo or DBRepository(Path("store/meta.sqlite"))
+        self.repo = repo or get_repo()
         self.diagnostic_reducer = diagnostic_reducer or DiagnosticReviewReducer(repo=self.repo)
         self.active_reducer = active_reducer or ReviewStateReducer(repo=self.repo)
         self.student_memory = student_memory or StudentMemoryService(repo=self.repo)

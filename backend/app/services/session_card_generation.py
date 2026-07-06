@@ -4,12 +4,12 @@ import logging
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from app.data.db_repository import DBRepository, StoredCard, StoredCardPresentation, StoredTopic
 from app.data.pinecone_backend import pinecone_namespace
 from app.data.vector_store import VectorStore
+from app.deps import get_repo, get_store
 from app.services.context_packs import build_diverse_chunk_pack
 from app.services.graph import generate_single_card
 from app.services.card_routing import classify_card_route
@@ -58,7 +58,7 @@ class SessionCardGenerationService:
         max_ready_prefetch_per_topic: int = 1,
         max_ready_prefetch_per_exam: int = 3,
     ) -> None:
-        self.repo = repo or DBRepository(Path("store/meta.sqlite"))
+        self.repo = repo or get_repo()
         self.max_consecutive_topic_cards = max(1, int(max_consecutive_topic_cards))
         self.max_ready_prefetch_per_topic = max(1, int(max_ready_prefetch_per_topic))
         self.max_ready_prefetch_per_exam = max(1, int(max_ready_prefetch_per_exam))
@@ -150,14 +150,14 @@ class SessionCardGenerationService:
         store: Optional[VectorStore] = None,
         prefetch: bool = False,
     ) -> Optional[GeneratedSessionCard]:
-        store = store or VectorStore()
+        store = store or get_store()
         exam = self.repo.get_exam(exam_id)
         if exam is None:
             return None
         raw_profile = (exam.info or {}).get("math_profile") if isinstance(exam.info, dict) else None
         document_math_profile = raw_profile if isinstance(raw_profile, dict) else {"kind": "non_math"}
         if store.vector_backend == "pinecone":
-            store.set_namespace(pinecone_namespace(user_id=user_id, exam_id=exam_id))
+            store = store.for_namespace(pinecone_namespace(user_id=user_id, exam_id=exam_id))
 
         diagnosed = diagnosed_topic_ids(repo=self.repo, user_id=user_id, exam_id=exam_id)
         needs_diagnostic = not all_topics_diagnosed(repo=self.repo, user_id=user_id, exam_id=exam_id)

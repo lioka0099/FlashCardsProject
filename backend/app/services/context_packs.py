@@ -4,14 +4,16 @@ from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
-from app.data.db_repository import StoredChunk
+from app.data.db_repository import DBRepository, StoredChunk
 from app.data.vector_store import VectorStore
+from app.deps import get_repo
 from app.utils.vectors import l2_normalize
 
 
 def build_representative_chunk_pack(
     *,
     store: VectorStore,
+    repo: Optional[DBRepository] = None,
     chunk_ids: Sequence[str],
     centroid: Optional[np.ndarray] = None,
     # Optional fast-path: reuse precomputed normalized embeddings from caller.
@@ -32,6 +34,7 @@ def build_representative_chunk_pack(
     - **Fast-path**: caller provides Xn (normalized vectors) and id_to_row mapping.
     - **Store-path**: reconstruct vectors for chunk_ids from the store.
     """
+    repo = repo or get_repo()
     ids = [c for c in chunk_ids if c]
     if not ids:
         return ""
@@ -74,7 +77,7 @@ def build_representative_chunk_pack(
     used = 0
     picked = 0
     for cid, sim in ranked:
-        ch = chunk_by_id.get(cid) if chunk_by_id is not None else store.db.get_chunk_by_id(cid)
+        ch = chunk_by_id.get(cid) if chunk_by_id is not None else repo.get_chunk_by_id(cid)
         if not ch or not ch.text:
             continue
         text = ch.text.strip().replace("\n", " ")
@@ -94,6 +97,7 @@ def build_representative_chunk_pack(
 def build_diverse_chunk_pack(
     *,
     store: VectorStore,
+    repo: Optional[DBRepository] = None,
     chunk_ids: Sequence[str],
     centroid: Optional[np.ndarray] = None,
     max_chunks: int = 8,
@@ -122,6 +126,7 @@ def build_diverse_chunk_pack(
     Returns:
         Formatted context string with diverse excerpts.
     """
+    repo = repo or get_repo()
     ids = [c for c in chunk_ids if c]
     if not ids:
         return ""
@@ -182,7 +187,7 @@ def build_diverse_chunk_pack(
     used = 0
     for idx in selected_indices:
         cid = resolved_ids[idx]
-        ch = store.db.get_chunk_by_id(cid)
+        ch = repo.get_chunk_by_id(cid)
         if not ch or not ch.text:
             continue
         text = ch.text.strip().replace("\n", " ")

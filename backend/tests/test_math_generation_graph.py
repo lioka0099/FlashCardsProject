@@ -77,6 +77,7 @@ class MathGenerationGraphTests(unittest.TestCase):
     def test_route_node_passes_exam_math_profile(self) -> None:
         original_classifier = graph_mod.classify_card_route
         original_store = graph_mod.VectorStore
+        original_get_repo = graph_mod.get_repo
         captured = {}
 
         class FakeDB:
@@ -123,6 +124,7 @@ class MathGenerationGraphTests(unittest.TestCase):
 
         try:
             graph_mod.VectorStore = FakeStore  # type: ignore[assignment]
+            graph_mod.get_repo = lambda: FakeDB()  # type: ignore[assignment]
             graph_mod.classify_card_route = fake_classifier  # type: ignore[assignment]
             out = graph_mod.node_route_card(
                 {
@@ -138,6 +140,7 @@ class MathGenerationGraphTests(unittest.TestCase):
         finally:
             graph_mod.classify_card_route = original_classifier  # type: ignore[assignment]
             graph_mod.VectorStore = original_store  # type: ignore[assignment]
+            graph_mod.get_repo = original_get_repo  # type: ignore[assignment]
 
         self.assertEqual(captured["document_math_profile"]["kind"], "non_math")
         self.assertEqual(out["card_route"], "default")

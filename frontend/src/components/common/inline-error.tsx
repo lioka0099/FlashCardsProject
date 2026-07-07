@@ -10,8 +10,8 @@ export function InlineError({
   message,
   onRetry,
   retryLabel = "Retry",
-  messageClassName = "home-sidebar__error",
-  retryClassName = "home-sidebar__retry",
+  messageClassName = "inline-error__message",
+  retryClassName = "inline-error__retry",
 }: InlineErrorProps) {
   return (
     <div>

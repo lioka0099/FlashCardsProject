@@ -12,8 +12,6 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.5",
-    "@tsparticles/react": "^3.0.0",
-    "@tsparticles/slim": "^3.9.1",
     "@types/katex": "^0.16.8",
     "framer-motion": "^12.38.0",
     "katex": "^0.17.0",

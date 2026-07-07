@@ -1,4 +1,5 @@
 import { apiEndpoints, assertEndpointAllowed } from "@/lib/api/endpoints";
+import { getToken } from "@/lib/session/token";
 
 type RequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
@@ -27,6 +28,9 @@ function buildUrl(path: string) {
 export async function apiRequest<TResponse>(path: string, options: RequestOptions = {}): Promise<TResponse> {
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
+
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
 
   let body: BodyInit | undefined;
   if (options.body !== undefined) {

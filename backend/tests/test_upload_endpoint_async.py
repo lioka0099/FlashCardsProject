@@ -1,9 +1,18 @@
 import io
+import pytest
 from fastapi.testclient import TestClient
+from app.api.auth import get_current_user
 from app.api.endpoints import app
 from app.data.db_engine import init_db
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _override_auth():
+    app.dependency_overrides[get_current_user] = lambda: "u-ep"
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 def test_from_upload_returns_processing_immediately():

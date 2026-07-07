@@ -169,7 +169,6 @@ class GenerateStarterCardsResponse(BaseModel):
 class GenerateSingleCardRequest(BaseModel):
     """Request to generate a single card for a topic."""
     # exam_id and topic_id are path parameters: POST /exams/{exam_id}/topics/{topic_id}/cards/generate
-    user_id: str = Field(..., description="User ID")
     difficulty: int = Field(default=1, ge=1, le=5, description="Target difficulty level; framework is selected by card route")
 
 
@@ -191,7 +190,6 @@ class CardListResponse(BaseModel):
 
 class ReviewCardRequest(BaseModel):
     """Request to review/rate a card."""
-    user_id: str = Field(..., description="User ID")
     # exam_id and card_id are path parameters: POST /exams/{exam_id}/cards/{card_id}/review
     rating: Literal["i_knew_it", "almost_knew", "learned_now", "dont_understand"] = Field(
         ...,
@@ -234,7 +232,6 @@ class NextCardResponse(BaseModel):
 
 class SessionEventRequest(BaseModel):
     """Request to log a session event."""
-    user_id: str = Field(..., description="User ID")
     # exam_id is a path parameter: POST /exams/{exam_id}/session/event
     event_type: str = Field(..., description="Event type: 'session_start', 'session_end', 'card_served'")
     payload: Optional[Dict[str, Any]] = Field(default=None, description="Additional event data")

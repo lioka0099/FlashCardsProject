@@ -12,6 +12,7 @@ _TEST_ROOT = Path(tempfile.mkdtemp(prefix="phase4_api_planner_"))
 os.environ["DATABASE_URL"] = f"sqlite:///{(_TEST_ROOT / 'meta.sqlite').as_posix()}"
 os.environ["VECTOR_BACKEND"] = "numpy"
 
+from app.api.auth import get_current_user
 from app.api.endpoints import app
 from app.data.db_engine import drop_all_tables, init_db
 from app.data.db_repository import DBRepository
@@ -31,6 +32,8 @@ class ApiPlannerTests(unittest.TestCase):
         self.mock_refill = self.refill_patcher.start()
         self.addCleanup(self.refill_patcher.stop)
         self.user_id = "phase4-user"
+        app.dependency_overrides[get_current_user] = lambda: self.user_id
+        self.addCleanup(app.dependency_overrides.pop, get_current_user, None)
         self.repo.ensure_user(self.user_id)
         self.exam_id = self.repo.create_exam(user_id=self.user_id, title="Phase 4 Exam")
         self.repo.update_exam_lifecycle(exam_id=self.exam_id, state="active_learning")

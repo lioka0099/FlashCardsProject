@@ -231,9 +231,9 @@ SUPPORTED_UPLOAD_EXTENSIONS = (".pdf", ".docx", ".txt")
 @app.post("/exams/from-upload")
 async def create_exam_from_upload_endpoint(
     files: List[UploadFile] = File(...),
-    user_id: str = Form(...),
     title: str = Form(...),
     mode: str = Form(default="mastery"),
+    user_id: str = Depends(auth.get_current_user),
 ):
     for f in files:
         name = (f.filename or "").lower()
@@ -261,8 +261,8 @@ async def create_exam_from_upload_endpoint(
 
 @app.get("/exams", response_model=ExamListResponse)
 async def list_exams_endpoint(
-    user_id: str = Query(...),
     limit: int = Query(default=50, ge=1, le=500),
+    user_id: str = Depends(auth.get_current_user),
 ):
     repo = get_repo()
     exams = repo.list_exams(user_id=user_id, limit=limit)
@@ -278,7 +278,7 @@ async def list_exams_endpoint(
 
 
 @app.get("/exams/{exam_id}")
-async def get_exam_endpoint(exam_id: str, user_id: str = Query(...)):
+async def get_exam_endpoint(exam_id: str, user_id: str = Depends(auth.get_current_user)):
     repo = get_repo()
     exam = repo.get_exam(exam_id)
     if exam is None:
@@ -321,7 +321,12 @@ async def list_topics_endpoint(exam_id: str):
 
 
 @app.post("/exams/{exam_id}/topics/{topic_id}/cards/generate", response_model=GenerateSingleCardResponse)
-async def generate_single_card_endpoint(exam_id: str, topic_id: str, req: GenerateSingleCardRequest):
+async def generate_single_card_endpoint(
+    exam_id: str,
+    topic_id: str,
+    req: GenerateSingleCardRequest,
+    user_id: str = Depends(auth.get_current_user),
+):
     repo = get_repo()
     store = get_store()
     exam = repo.get_exam(exam_id)
@@ -351,7 +356,7 @@ async def generate_single_card_endpoint(exam_id: str, topic_id: str, req: Genera
             context_pack=context_pack,
             difficulty=req.difficulty,
             card_type="learning",
-            user_id=req.user_id,
+            user_id=user_id,
             store=store,
         )
     except Exception as exc:
@@ -381,7 +386,7 @@ async def list_cards_endpoint(
 async def next_card_endpoint(
     exam_id: str,
     background_tasks: BackgroundTasks,
-    user_id: str = Query(...),
+    user_id: str = Depends(auth.get_current_user),
 ):
     repo = get_repo()
     store = get_store()
@@ -448,7 +453,7 @@ async def next_card_endpoint(
 
 
 @app.get("/exams/{exam_id}/session/previous-card", response_model=NextCardResponse)
-async def previous_card_endpoint(exam_id: str, user_id: str = Query(...)):
+async def previous_card_endpoint(exam_id: str, user_id: str = Depends(auth.get_current_user)):
     repo = get_repo()
     latest = repo.get_latest_presentation(user_id=user_id, exam_id=exam_id)
     if latest is None:
@@ -467,8 +472,8 @@ async def previous_card_endpoint(exam_id: str, user_id: str = Query(...)):
 @app.get("/exams/{exam_id}/cards/presented-history", response_model=CardListResponse)
 async def presented_history_endpoint(
     exam_id: str,
-    user_id: str = Query(...),
     limit: int = Query(default=500, ge=1, le=1000),
+    user_id: str = Depends(auth.get_current_user),
 ):
     repo = get_repo()
     rows = repo.list_presentations(user_id=user_id, exam_id=exam_id, ascending=False, limit=limit)
@@ -519,7 +524,11 @@ async def presented_history_endpoint(
 
 
 @app.get("/documents/{doc_id}/source")
-async def document_source_endpoint(doc_id: str, exam_id: str = Query(...), user_id: str = Query(...)):
+async def document_source_endpoint(
+    doc_id: str,
+    exam_id: str = Query(...),
+    user_id: str = Depends(auth.get_current_user),
+):
     repo = get_repo()
     exam = repo.get_exam(exam_id)
     if exam is None:
@@ -555,22 +564,20 @@ async def review_card_endpoint(
     background_tasks: BackgroundTasks,
     request: Request,
     body: Optional[ReviewCardRequest] = Body(default=None),
-    user_id: Optional[str] = Form(default=None),
     rating: Optional[str] = Form(default=None),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    user_id: str = Depends(auth.get_current_user),
 ):
-    parsed_user_id = user_id
     parsed_rating = rating
     if body is not None:
-        parsed_user_id = body.user_id
         parsed_rating = body.rating
-    if not parsed_user_id or not parsed_rating:
+    if not parsed_rating:
         if request.headers.get("content-type", "").startswith("application/json"):
             payload = await request.json()
-            parsed_user_id = parsed_user_id or payload.get("user_id")
             parsed_rating = parsed_rating or payload.get("rating")
-    if not parsed_user_id or not parsed_rating:
-        return JSONResponse({"error": "Missing user_id or rating"}, status_code=422)
+    if not parsed_rating:
+        return JSONResponse({"error": "Missing rating"}, status_code=422)
+    parsed_user_id = user_id
 
     key = (idempotency_key or "").strip() or (
         f"{parsed_user_id}:{exam_id}:{card_id}:{parsed_rating}:{datetime.now(timezone.utc).isoformat()}"
@@ -618,10 +625,14 @@ async def review_card_endpoint(
 
 
 @app.post("/exams/{exam_id}/session/event", response_model=SessionEventResponse)
-async def session_event_endpoint(exam_id: str, req: SessionEventRequest):
+async def session_event_endpoint(
+    exam_id: str,
+    req: SessionEventRequest,
+    user_id: str = Depends(auth.get_current_user),
+):
     repo = get_repo()
     event_id = repo.add_event(
-        user_id=req.user_id,
+        user_id=user_id,
         exam_id=exam_id,
         type=req.event_type,
         payload=req.payload or {},
@@ -630,7 +641,7 @@ async def session_event_endpoint(exam_id: str, req: SessionEventRequest):
 
 
 @app.get("/exams/{exam_id}/progress", response_model=TopicProgressResponse)
-async def topic_progress_endpoint(exam_id: str, user_id: str = Query(...)):
+async def topic_progress_endpoint(exam_id: str, user_id: str = Depends(auth.get_current_user)):
     repo = get_repo()
     topics = {t.topic_id: t for t in repo.list_topics(exam_id=exam_id)}
     prof_rows = repo.list_topic_proficiencies(user_id=user_id, exam_id=exam_id)

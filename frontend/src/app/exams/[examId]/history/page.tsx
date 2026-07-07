@@ -1,4 +1,4 @@
-import { HistoryList } from "@/components/exam/history-list";
+import { HistoryList } from "@/components/exam/history/history-list";
 
 type ExamHistoryPageProps = {
   params: Promise<{

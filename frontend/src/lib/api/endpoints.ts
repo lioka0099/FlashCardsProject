@@ -5,7 +5,6 @@ export const apiEndpoints = {
   examById: (examId: string) => `/exams/${examId}`,
   examFromUpload: "/exams/from-upload",
   sessionNextCard: (examId: string) => `/exams/${examId}/session/next-card`,
-  sessionPreviousCard: (examId: string) => `/exams/${examId}/session/previous-card`,
   sessionEvents: (examId: string) => `/exams/${examId}/session/event`,
   examProgress: (examId: string) => `/exams/${examId}/progress`,
   presentedHistory: (examId: string) => `/exams/${examId}/cards/presented-history`,

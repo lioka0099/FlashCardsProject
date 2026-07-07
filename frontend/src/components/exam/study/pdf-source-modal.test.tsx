@@ -32,7 +32,7 @@ vi.mock("react-pdf", () => ({
   pdfjs: { GlobalWorkerOptions: { workerSrc: "" }, version: "10.0.0" },
 }));
 
-import { PdfSourceModal } from "@/components/exam/pdf-source-modal";
+import { PdfSourceModal } from "@/components/exam/study/pdf-source-modal";
 
 const card = { exam_id: "exam-1" } as Card;
 const proof: ProofSpan = {

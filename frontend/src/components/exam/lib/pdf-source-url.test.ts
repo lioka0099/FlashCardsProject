@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSourceUrl } from "@/components/exam/pdf-source-url";
+import { buildSourceUrl } from "@/components/exam/lib/pdf-source-url";
 import type { Card, ProofSpan } from "@/lib/api/client";
 
 const card = { exam_id: "exam-1" } as Card;

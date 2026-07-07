@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, type PropsWithChildren } from "react";
+import { createContext, useContext, type PropsWithChildren } from "react";
 
 type GuestSession = {
   userId: string;
@@ -15,8 +15,7 @@ const DEFAULT_GUEST_SESSION: GuestSession = {
 const GuestSessionContext = createContext<GuestSession>(DEFAULT_GUEST_SESSION);
 
 export function GuestSessionProvider({ children }: PropsWithChildren) {
-  const session = useMemo<GuestSession>(() => DEFAULT_GUEST_SESSION, []);
-  return <GuestSessionContext.Provider value={session}>{children}</GuestSessionContext.Provider>;
+  return <GuestSessionContext.Provider value={DEFAULT_GUEST_SESSION}>{children}</GuestSessionContext.Provider>;
 }
 
 export function useGuestSession() {

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { HistoryList } from "@/components/exam/history-list";
+import { HistoryList } from "@/components/exam/history/history-list";
 import type { Card } from "@/lib/api/client";
 
 const getExamByIdMock = vi.fn();

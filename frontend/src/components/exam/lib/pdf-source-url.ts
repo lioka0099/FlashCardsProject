@@ -3,7 +3,7 @@ import type { Card, ProofSpan } from "@/lib/api/client";
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
 
-export function hasExactOffsets(proof: ProofSpan): boolean {
+function hasExactOffsets(proof: ProofSpan): boolean {
   return (
     Number.isFinite(proof.start) &&
     Number.isFinite(proof.end) &&

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeHighlightItemIndices } from "@/components/exam/pdf-highlight";
+import { computeHighlightItemIndices } from "@/components/exam/lib/pdf-highlight";
 
 describe("computeHighlightItemIndices", () => {
   it("matches an exact multi-item quote", () => {

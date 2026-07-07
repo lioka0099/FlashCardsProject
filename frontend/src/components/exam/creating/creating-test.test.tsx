@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { CreatingTest } from "@/components/exam/creating-test";
+import { CreatingTest } from "@/components/exam/creating/creating-test";
 
 const progress = {
   updated_at: "x",

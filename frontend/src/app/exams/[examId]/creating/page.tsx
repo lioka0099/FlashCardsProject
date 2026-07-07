@@ -1,4 +1,4 @@
-import { CreatingTestScreen } from "@/components/exam/creating-test-screen";
+import { CreatingTestScreen } from "@/components/exam/creating/creating-test-screen";
 
 type Props = { params: Promise<{ examId: string }> };
 

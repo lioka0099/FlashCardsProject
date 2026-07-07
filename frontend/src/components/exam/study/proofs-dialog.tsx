@@ -5,12 +5,12 @@ import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { Card, ProofSpan } from "@/lib/api/client";
 import dynamic from "next/dynamic";
-import { buildSourceUrl } from "@/components/exam/pdf-source-url";
+import { buildSourceUrl } from "@/components/exam/lib/pdf-source-url";
 
 // react-pdf (pdf.js) touches browser-only globals (DOMMatrix) at module load,
 // so it must never evaluate during SSR. Load the modal client-only.
 const PdfSourceModal = dynamic(
-  () => import("@/components/exam/pdf-source-modal").then((m) => m.PdfSourceModal),
+  () => import("@/components/exam/study/pdf-source-modal").then((m) => m.PdfSourceModal),
   { ssr: false },
 );
 

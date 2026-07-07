@@ -222,11 +222,6 @@ export async function getSessionNextCard(examId: string, userId: string): Promis
   return apiRequest<NextCardResponse>(`${apiEndpoints.sessionNextCard(examId)}?${query.toString()}`);
 }
 
-export async function getSessionPreviousCard(examId: string, userId: string): Promise<NextCardResponse> {
-  const query = new URLSearchParams({ user_id: userId });
-  return apiRequest<NextCardResponse>(`${apiEndpoints.sessionPreviousCard(examId)}?${query.toString()}`);
-}
-
 export async function getPresentedHistory(
   examId: string,
   userId: string,

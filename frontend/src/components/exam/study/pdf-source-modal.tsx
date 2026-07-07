@@ -7,8 +7,8 @@ import type { TextContent, TextItem } from "react-pdf";
 import "react-pdf/dist/Page/TextLayer.css";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import type { Card, ProofSpan } from "@/lib/api/client";
-import { buildSourceUrl } from "@/components/exam/pdf-source-url";
-import { computeHighlightItemIndices } from "@/components/exam/pdf-highlight";
+import { buildSourceUrl } from "@/components/exam/lib/pdf-source-url";
+import { computeHighlightItemIndices } from "@/components/exam/lib/pdf-highlight";
 
 // Self-host the pdf.js worker from the installed pdfjs-dist so its version
 // always matches and there is no network/CDN dependency. Turbopack/Webpack

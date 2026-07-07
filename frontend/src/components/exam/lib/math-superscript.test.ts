@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toUnicodeSuperscripts } from "@/components/exam/math-superscript";
+import { toUnicodeSuperscripts } from "@/components/exam/lib/math-superscript";
 
 describe("toUnicodeSuperscripts", () => {
   it("converts simple integer exponents", () => {

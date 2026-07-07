@@ -1,9 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { ProofsDialog } from "@/components/exam/proofs-dialog";
+import { ProofsDialog } from "@/components/exam/study/proofs-dialog";
 import type { Card } from "@/lib/api/client";
 
-vi.mock("@/components/exam/pdf-source-modal", () => ({
+vi.mock("@/components/exam/study/pdf-source-modal", () => ({
   PdfSourceModal: ({ proof }: { proof: { doc_id: string } }) => (
     <div data-testid="pdf-modal">modal:{proof.doc_id}</div>
   ),

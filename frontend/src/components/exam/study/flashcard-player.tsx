@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import { ArrowLeft, ArrowRight, Brain, Quote, RotateCcw, Sparkles } from "lucide-react";
 import type { Card } from "@/lib/api/client";
-import { RatingControls } from "@/components/exam/rating-controls";
+import { RatingControls } from "@/components/exam/study/rating-controls";
 import { MathText } from "@/components/exam/math-text";
-import { CardLoader } from "@/components/exam/card-loader";
+import { CardLoader } from "@/components/exam/study/card-loader";
 import type { ReviewRating } from "@/lib/api/client";
 import "./study.css";
 

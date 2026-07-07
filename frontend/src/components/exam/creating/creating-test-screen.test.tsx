@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CreatingTestScreen } from "@/components/exam/creating-test-screen";
+import { CreatingTestScreen } from "@/components/exam/creating/creating-test-screen";
 
 const replaceMock = vi.fn();
 const getExamByIdMock = vi.fn();

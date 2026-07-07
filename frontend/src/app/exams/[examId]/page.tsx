@@ -1,4 +1,4 @@
-import { ExamWorkspace } from "@/components/exam/exam-workspace";
+import { ExamWorkspace } from "@/components/exam/study/exam-workspace";
 
 type ExamPageProps = {
   params: Promise<{

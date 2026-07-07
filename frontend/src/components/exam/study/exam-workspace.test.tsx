@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ExamWorkspace } from "@/components/exam/exam-workspace";
+import { ExamWorkspace } from "@/components/exam/study/exam-workspace";
 import type { Card, ReviewRating } from "@/lib/api/client";
 
 const getExamByIdMock = vi.fn();
@@ -24,7 +24,7 @@ vi.mock("@/lib/api/client", () => ({
   },
 }));
 
-vi.mock("@/components/exam/progress-panel", () => ({
+vi.mock("@/components/exam/study/progress-panel", () => ({
   ProgressPanel: () => null,
 }));
 
@@ -32,7 +32,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: replaceMock, push: vi.fn() }),
 }));
 
-vi.mock("@/components/exam/proofs-dialog", () => ({
+vi.mock("@/components/exam/study/proofs-dialog", () => ({
   ProofsDialog: () => null,
 }));
 

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { FlashcardPlayer } from "@/components/exam/flashcard-player";
+import { FlashcardPlayer } from "@/components/exam/study/flashcard-player";
 import type { Card } from "@/lib/api/client";
 
 function buildCard(overrides?: Partial<Card>): Card {

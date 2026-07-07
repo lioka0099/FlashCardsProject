@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getExamById, type BootstrapProgress } from "@/lib/api/client";
 import { mapHomeApiError } from "@/lib/api/ui-error";
 import { useGuestSession } from "@/lib/session/guest-session";
-import { CreatingTest } from "@/components/exam/creating-test";
+import { CreatingTest } from "@/components/exam/creating/creating-test";
 
 export function CreatingTestScreen({ examId }: { examId: string }) {
   const router = useRouter();

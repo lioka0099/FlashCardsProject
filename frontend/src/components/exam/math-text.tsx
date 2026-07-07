@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import renderMathInElement from "katex/contrib/auto-render";
 import "katex/dist/katex.min.css";
-import { toUnicodeSuperscripts } from "@/components/exam/math-superscript";
+import { toUnicodeSuperscripts } from "@/components/exam/lib/math-superscript";
 
 // Standard delimiters the card LLM emits. Keep display ($$, \[ \]) before the
 // inline forms so the longer openers win.

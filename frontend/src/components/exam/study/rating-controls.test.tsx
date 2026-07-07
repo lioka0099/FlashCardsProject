@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { RatingControls } from "@/components/exam/rating-controls";
+import { RatingControls } from "@/components/exam/study/rating-controls";
 
 describe("RatingControls", () => {
   it("renders all four rating buttons", () => {

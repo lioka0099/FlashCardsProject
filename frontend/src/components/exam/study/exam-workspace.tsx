@@ -19,9 +19,9 @@ import {
 import { mapApiError } from "@/lib/api/ui-error";
 import { useGuestSession } from "@/lib/session/guest-session";
 import { InlineError } from "@/components/common/inline-error";
-import { FlashcardPlayer } from "@/components/exam/flashcard-player";
-import { ProofsDialog } from "@/components/exam/proofs-dialog";
-import { ProgressPanel } from "@/components/exam/progress-panel";
+import { FlashcardPlayer } from "@/components/exam/study/flashcard-player";
+import { ProofsDialog } from "@/components/exam/study/proofs-dialog";
+import { ProgressPanel } from "@/components/exam/study/progress-panel";
 
 type ExamWorkspaceProps = {
   examId: string;

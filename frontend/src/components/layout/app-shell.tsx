@@ -13,7 +13,12 @@ export function AppShell({ children }: PropsWithChildren) {
   const isStudyScreen = /^\/exams\/[^/]+$/.test(pathname);
   const isHistoryScreen = /^\/exams\/[^/]+\/history$/.test(pathname);
   const showHeader =
-    pathname !== "/" && pathname !== "/login" && !pathname.endsWith("/creating") && !isStudyScreen && !isHistoryScreen;
+    pathname !== "/" &&
+    pathname !== "/login" &&
+    pathname !== "/profile" &&
+    !pathname.endsWith("/creating") &&
+    !isStudyScreen &&
+    !isHistoryScreen;
 
   return (
     <div className="app-shell">

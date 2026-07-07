@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { getMe, logout } from "@/lib/api/auth";
 import "./profile.css";
@@ -10,6 +11,12 @@ export default function ProfilePage() {
 
   return (
     <section className="profile">
+      <div className="profile__bar">
+        <Link href="/" className="profile__back">
+          <span aria-hidden>←</span> Back to home
+        </Link>
+      </div>
+
       <div className="profile__card">
         <div className="profile__head">
           <span className="profile__avatar" aria-hidden>{initial}</span>

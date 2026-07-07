@@ -37,12 +37,12 @@ function fileType(info: Record<string, unknown>) {
 }
 
 function progressPct(info: Record<string, unknown>) {
-  const total = Number(info.diagnostic_total ?? 0);
-  const answered = Number(info.diagnostic_answered ?? 0);
-  if (!total || total <= 0) {
+  // Overall proficiency (0..1), same score the exam's progress ring shows.
+  const proficiency = info.overall_proficiency;
+  if (proficiency == null) {
     return 0;
   }
-  return Math.min(100, Math.round((answered / total) * 100));
+  return Math.max(0, Math.min(100, Math.round(Number(proficiency) * 100)));
 }
 
 export function ExamHistorySidebar({ className, onNavigate, onNewTest }: ExamHistorySidebarProps) {

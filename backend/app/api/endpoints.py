@@ -161,7 +161,7 @@ def _card_to_response(repo: DBRepository, card_id: str) -> Optional[CardResponse
     )
 
 
-def _exam_to_response(exam: Any) -> ExamResponse:
+def _exam_to_response(exam: Any, overall_proficiency: Optional[float] = None) -> ExamResponse:
     info = dict(exam.info or {})
     info.update(
         {
@@ -170,6 +170,7 @@ def _exam_to_response(exam: Any) -> ExamResponse:
             "diagnostic_answered": exam.diagnostic_answered,
             "diagnostic_started_at": exam.diagnostic_started_at,
             "diagnostic_completed_at": exam.diagnostic_completed_at,
+            "overall_proficiency": overall_proficiency,
         }
     )
     return ExamResponse(
@@ -225,7 +226,14 @@ async def list_exams_endpoint(
     repo = get_repo()
     exams = repo.list_exams(user_id=user_id, limit=limit)
     exams = [x for x in exams if getattr(x, "state", None) != "failed"]
-    return ExamListResponse(exams=[_exam_to_response(x) for x in exams])
+    # ponytail: one proficiency query per exam (N+1); fine under the 500-exam limit,
+    # batch into a single query if list_exams ever gets slow.
+    responses = []
+    for x in exams:
+        profs = repo.list_topic_proficiencies(user_id=user_id, exam_id=x.exam_id)
+        overall = (sum(float(p.proficiency) for p in profs) / len(profs)) if profs else None
+        responses.append(_exam_to_response(x, overall_proficiency=overall))
+    return ExamListResponse(exams=responses)
 
 
 @app.get("/exams/{exam_id}")

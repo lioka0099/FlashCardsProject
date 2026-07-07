@@ -302,8 +302,13 @@ async def get_exam_endpoint(exam_id: str, user_id: str = Depends(auth.get_curren
 
 
 @app.get("/exams/{exam_id}/topics", response_model=TopicListResponse)
-async def list_topics_endpoint(exam_id: str):
+async def list_topics_endpoint(exam_id: str, user_id: str = Depends(auth.get_current_user)):
     repo = get_repo()
+    exam = repo.get_exam(exam_id)
+    if exam is None:
+        return JSONResponse({"error": f"Exam not found: {exam_id}"}, status_code=404)
+    if exam.user_id != user_id:
+        return JSONResponse({"error": "Exam does not belong to user"}, status_code=403)
     rows = repo.list_topics(exam_id=exam_id)
     topics: List[TopicResponse] = []
     for t in rows:
@@ -332,6 +337,8 @@ async def generate_single_card_endpoint(
     exam = repo.get_exam(exam_id)
     if exam is None:
         return GenerateSingleCardResponse(card=None, error=f"Exam not found: {exam_id}")
+    if exam.user_id != user_id:
+        return GenerateSingleCardResponse(card=None, error="Exam does not belong to user")
     if store.vector_backend == "pinecone":
         store = store.for_namespace(f"u:{exam.user_id}|e:{exam_id}")
     topic_map = {t.topic_id: t for t in repo.list_topics(exam_id=exam_id)}
@@ -371,8 +378,14 @@ async def generate_single_card_endpoint(
 async def list_cards_endpoint(
     exam_id: str,
     limit: int = Query(default=200, ge=1, le=1000),
+    user_id: str = Depends(auth.get_current_user),
 ):
     repo = get_repo()
+    exam = repo.get_exam(exam_id)
+    if exam is None:
+        return JSONResponse({"error": f"Exam not found: {exam_id}"}, status_code=404)
+    if exam.user_id != user_id:
+        return JSONResponse({"error": "Exam does not belong to user"}, status_code=403)
     rows = repo.list_cards_for_exam(exam_id=exam_id, limit=limit)
     cards: List[CardResponse] = []
     for row in rows:

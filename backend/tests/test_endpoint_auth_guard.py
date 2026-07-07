@@ -16,3 +16,15 @@ def test_next_card_requires_auth():
     init_db()
     r = client.get("/exams/some-exam/session/next-card", params={"user_id": "anyone"})
     assert r.status_code == 401
+
+
+def test_list_topics_requires_auth():
+    init_db()
+    r = client.get("/exams/some-exam/topics")
+    assert r.status_code == 401
+
+
+def test_list_cards_requires_auth():
+    init_db()
+    r = client.get("/exams/some-exam/cards")
+    assert r.status_code == 401

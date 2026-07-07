@@ -21,6 +21,19 @@ class ExamCreateRequest(BaseModel):
     info: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
 
 
+class RegisterRequest(BaseModel):
+    """Request to create an account."""
+    email: str = Field(..., description="User email (unique)")
+    password: str = Field(..., min_length=6, description="Plaintext password (hashed server-side)")
+    name: Optional[str] = Field(default=None, description="Display name")
+
+
+class LoginRequest(BaseModel):
+    """Request to log in."""
+    email: str = Field(..., description="User email")
+    password: str = Field(..., description="Plaintext password")
+
+
 class ExamResponse(BaseModel):
     """Response for exam data."""
     exam_id: str

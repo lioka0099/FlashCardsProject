@@ -4,7 +4,7 @@ Wires requests to the service layer via app/deps."""
 import os
 
 try:
-    from fastapi import BackgroundTasks, Body, FastAPI, File, Form, Header, Query, Request, UploadFile  # type: ignore
+    from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile  # type: ignore
     from fastapi.middleware.cors import CORSMiddleware  # type: ignore
     from fastapi.responses import FileResponse, JSONResponse  # type: ignore
 except Exception as exc:
@@ -17,6 +17,9 @@ from pathlib import Path
 import shutil
 from typing import Any, Dict, List, Optional
 
+import uuid
+
+from app.api import auth
 from app.api.schemas import (
     CardListResponse,
     CardResponse,
@@ -24,8 +27,10 @@ from app.api.schemas import (
     ExamResponse,
     GenerateSingleCardRequest,
     GenerateSingleCardResponse,
+    LoginRequest,
     NextCardResponse,
     ProofSpan,
+    RegisterRequest,
     ReviewCardRequest,
     SessionEventRequest,
     SessionEventResponse,
@@ -36,7 +41,7 @@ from app.api.schemas import (
 )
 from app.data.db_engine import get_db
 from app.data.db_repository import DBRepository
-from app.data.models import CardReview
+from app.data.models import CardReview, User
 from app.deps import get_repo, get_store
 from app.services.diagnostic.lifecycle import DiagnosticBootstrapError, DiagnosticLifecycleService
 from app.services.exams import ImmutableExamError
@@ -95,6 +100,42 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.post("/auth/register")
+def register_endpoint(req: RegisterRequest):
+    with get_db() as db:
+        if db.query(User).filter(User.email == req.email).first():
+            raise HTTPException(status_code=409, detail="Email already registered")
+        user = User(
+            user_id=uuid.uuid4().hex,
+            email=req.email,
+            name=req.name,
+            password_hash=auth.hash_password(req.password),
+        )
+        db.add(user)
+        db.flush()
+        user_id = user.user_id
+    return {"token": auth.issue_token(user_id), "user_id": user_id}
+
+
+@app.post("/auth/login")
+def login_endpoint(req: LoginRequest):
+    with get_db() as db:
+        user = db.query(User).filter(User.email == req.email).first()
+        if not user or not user.password_hash or not auth.verify_password(req.password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        user_id = user.user_id
+    return {"token": auth.issue_token(user_id), "user_id": user_id}
+
+
+@app.get("/auth/me")
+def me_endpoint(user_id: str = Depends(auth.get_current_user)):
+    with get_db() as db:
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {"user_id": user.user_id, "email": user.email, "name": user.name}
 
 
 def _immutable_exam_error_payload(*, exam_id: Optional[str] = None, message: str) -> Dict[str, Any]:

@@ -9,7 +9,7 @@ from typing import Optional
 
 from app.data.db_repository import DBRepository
 from app.deps import get_repo
-from app.services.diagnostic_lifecycle import DiagnosticLifecycleService
+from app.services.diagnostic.lifecycle import DiagnosticLifecycleService
 
 logger = logging.getLogger(__name__)
 

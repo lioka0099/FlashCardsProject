@@ -11,9 +11,9 @@ os.environ["VECTOR_BACKEND"] = "numpy"
 
 from app.data.db_engine import drop_all_tables, init_db
 from app.data.db_repository import DBRepository
-from app.services.card_scheduling_state import CardSchedulingStateService
-from app.services.review_state_reducer import ReviewStateReducer
-from app.services.topic_proficiency_state import TopicProficiencyStateService
+from app.services.review.card_scheduling_state import CardSchedulingStateService
+from app.services.review.state_reducer import ReviewStateReducer
+from app.services.review.topic_proficiency_state import TopicProficiencyStateService
 
 
 class RepositoryAndReducerTests(unittest.TestCase):

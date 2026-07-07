@@ -8,9 +8,9 @@ os.environ["DATABASE_URL"] = f"sqlite:///{(_TEST_ROOT / 'meta.sqlite').as_posix(
 os.environ["VECTOR_BACKEND"] = "numpy"
 
 from app.data.db_repository import DBRepository  # noqa: E402
-from app.services.review_service import ReviewService  # noqa: E402
-from app.services.student_memory import StudentMemoryService  # noqa: E402
-from app.services import student_model as student_model_mod  # noqa: E402
+from app.services.review.service import ReviewService  # noqa: E402
+from app.services.learner.student_memory import StudentMemoryService  # noqa: E402
+from app.services.learner import student_model as student_model_mod  # noqa: E402
 
 
 class StudentMemoryTests(unittest.TestCase):

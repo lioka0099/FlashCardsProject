@@ -1,3 +1,5 @@
+"""Load .pdf files into per-page text (Page) records for ingestion."""
+
 from pathlib import Path
 from typing import List, TypedDict, Union
 

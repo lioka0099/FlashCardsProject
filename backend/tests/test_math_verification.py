@@ -1,6 +1,6 @@
 import unittest
 
-from app.services.math_verification import verify_math_solution
+from app.services.math.verification import verify_math_solution
 
 
 class MathVerificationTests(unittest.TestCase):

@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timezone
 
 from app.data.db_repository import StoredCard, StoredCardPresentation, StoredCardScheduling, StoredTopicProficiency
-from app.services.session_planner import SessionPlannerService
+from app.services.session.planner import SessionPlannerService
 
 
 class FakeRepo:

@@ -1,8 +1,8 @@
 import unittest
 
 from app.data.db_repository import StoredChunk
-from app.services import document_math_profile as profile_mod
-from app.services.document_math_profile import (
+from app.services.corpus import document_math_profile as profile_mod
+from app.services.corpus.document_math_profile import (
     build_document_math_sample,
     classify_document_math_profile,
     normalize_document_math_kind,

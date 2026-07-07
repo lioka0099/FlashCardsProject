@@ -1,3 +1,5 @@
+"""Exam workspace lifecycle: create/load exams, attach documents, and enforce immutability once locked."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

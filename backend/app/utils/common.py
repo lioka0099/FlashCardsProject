@@ -1,3 +1,5 @@
+"""Small shared helpers (typed environment-variable access)."""
+
 import os
 from pathlib import Path
 from typing import Optional

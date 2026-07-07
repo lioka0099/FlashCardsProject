@@ -1,3 +1,5 @@
+"""OpenAI client wrapper: chat/embedding calls with retry+backoff, model config, and JSON-response parsing."""
+
 from typing import Any, Callable, List, TypeVar
 import json
 import logging

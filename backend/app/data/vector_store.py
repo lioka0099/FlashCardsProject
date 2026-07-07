@@ -1,3 +1,6 @@
+"""VectorStore: the retrieval seam over the vector backend (Pinecone or local numpy index).
+Embeds text and runs top-k similarity, scoped per-exam by namespace."""
+
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path

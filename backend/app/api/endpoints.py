@@ -1,3 +1,6 @@
+"""FastAPI HTTP layer: all REST endpoints for exams, ingestion, diagnostics, review sessions and cards.
+Wires requests to the service layer via app/deps."""
+
 import os
 
 try:
@@ -35,14 +38,14 @@ from app.data.db_engine import get_db
 from app.data.db_repository import DBRepository
 from app.data.models import CardReview
 from app.deps import get_repo, get_store
-from app.services.diagnostic_lifecycle import DiagnosticBootstrapError, DiagnosticLifecycleService
+from app.services.diagnostic.lifecycle import DiagnosticBootstrapError, DiagnosticLifecycleService
 from app.services.exams import ImmutableExamError
-from app.services.graph import generate_single_card
-from app.services.ingestion import UnsupportedDocumentTypeError
-from app.services.review_service import ReviewService
-from app.services.session_card_generation import SessionCardGenerationService
-from app.services.session_planner import SessionPlannerService
-from app.services.context_packs import build_diverse_chunk_pack
+from app.services.generation.graph import generate_single_card
+from app.services.corpus.ingestion import UnsupportedDocumentTypeError
+from app.services.review.service import ReviewService
+from app.services.session.card_generation import SessionCardGenerationService
+from app.services.session.planner import SessionPlannerService
+from app.services.generation.context_packs import build_diverse_chunk_pack
 from app.services.job_worker import start_embedded_worker
 
 app = FastAPI(title="DocQA Proto")

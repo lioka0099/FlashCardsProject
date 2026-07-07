@@ -10,7 +10,7 @@ _TEST_ROOT = Path(tempfile.mkdtemp(prefix="phase5_uniqueness_gate_"))
 os.environ["DATABASE_URL"] = f"sqlite:///{(_TEST_ROOT / 'meta.sqlite').as_posix()}"
 os.environ["VECTOR_BACKEND"] = "numpy"
 
-from app.services.graph import BatchSeenQuestion, node_check_uniqueness  # noqa: E402
+from app.services.generation.graph import BatchSeenQuestion, node_check_uniqueness  # noqa: E402
 
 
 def _state(*, batch_seen_questions):
@@ -114,7 +114,7 @@ class UniquenessGateTests(unittest.TestCase):
             def list_math_fingerprints_for_exam(*, exam_id, limit=200):
                 return []
 
-        with patch("app.services.graph.get_repo", lambda: _FakeRepo()):
+        with patch("app.services.generation.graph.get_repo", lambda: _FakeRepo()):
             out = node_check_uniqueness(state)
         self.assertFalse(out["is_unique"])
 

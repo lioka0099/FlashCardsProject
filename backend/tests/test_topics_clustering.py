@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from app.services.topics import (
+from app.services.corpus.topics import (
     _agglomerative_single_link_threshold,
     _assign_noise_to_nearest_cluster,
     _cluster_topic_embeddings,

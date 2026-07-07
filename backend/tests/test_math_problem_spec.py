@@ -1,6 +1,6 @@
 import unittest
 
-from app.services.math_problem_spec import normalize_math_problem_spec, render_math_question
+from app.services.math.problem_spec import normalize_math_problem_spec, render_math_question
 
 
 class MathProblemSpecTests(unittest.TestCase):

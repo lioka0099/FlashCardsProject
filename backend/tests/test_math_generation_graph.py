@@ -1,7 +1,7 @@
 import unittest
 
 from app.data.db_repository import StoredExam, StoredTopic
-from app.services import graph as graph_mod
+from app.services.generation import graph as graph_mod
 
 
 class MathGenerationGraphTests(unittest.TestCase):

@@ -1,3 +1,5 @@
+"""Pinecone vector-DB client and per-exam namespace helpers (the cloud vector backend)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

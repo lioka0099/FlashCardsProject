@@ -15,7 +15,7 @@ os.environ["VECTOR_BACKEND"] = "numpy"
 from app.api.endpoints import app
 from app.data.db_engine import drop_all_tables, init_db
 from app.data.db_repository import DBRepository
-from app.services.session_card_generation import GeneratedSessionCard, SessionCardGenerationService
+from app.services.session.card_generation import GeneratedSessionCard, SessionCardGenerationService
 
 
 class ApiPlannerTests(unittest.TestCase):

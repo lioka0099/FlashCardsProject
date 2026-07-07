@@ -1,12 +1,12 @@
 import unittest
 
-from app.services.difficulty_frameworks import BLOOM_LEVELS, TAG_LEVELS, get_level
-from app.services.math_compound_spec import (
+from app.services.generation.difficulty_frameworks import BLOOM_LEVELS, TAG_LEVELS, get_level
+from app.services.math.compound_spec import (
     math_structural_fingerprint,
     normalize_compound_spec,
 )
-from app.services.math_solver import solve_math_problem
-from app.services.math_verification import verify_compound_solution, verify_math_solution
+from app.services.math.solver import solve_math_problem
+from app.services.math.verification import verify_compound_solution, verify_math_solution
 
 
 def _eigen_problem(final_answer="1, 3"):

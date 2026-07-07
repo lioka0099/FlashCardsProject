@@ -1,9 +1,9 @@
 import unittest
 
-from app.services import card_routing
-from app.services.card_routing import classify_card_route
-from app.services.difficulty_frameworks import clamp_difficulty, framework_for_route, get_level
-from app.services.math_classification import MathClassificationEvidence
+from app.services.generation import card_routing
+from app.services.generation.card_routing import classify_card_route
+from app.services.generation.difficulty_frameworks import clamp_difficulty, framework_for_route, get_level
+from app.services.math.classification import MathClassificationEvidence
 
 
 class MathRoutingTests(unittest.TestCase):

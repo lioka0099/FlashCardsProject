@@ -1,3 +1,5 @@
+"""In-process cache for per-document context summaries."""
+
 from __future__ import annotations
 
 import json

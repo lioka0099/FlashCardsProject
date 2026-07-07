@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from app.api.endpoints import app
 from app.data.db_engine import drop_all_tables, init_db
 from app.data.vector_store import VectorStore
-from app.services.ingestion import UnsupportedDocumentTypeError, ingest_documents
+from app.services.corpus.ingestion import UnsupportedDocumentTypeError, ingest_documents
 
 
 def _write_file(name: str, body: str) -> str:

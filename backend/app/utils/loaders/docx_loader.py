@@ -1,3 +1,5 @@
+"""Load .docx files into per-page text (Page) records for ingestion."""
+
 from typing import List, TypedDict
 
 class Page(TypedDict):

@@ -1,0 +1,2 @@
+"""FlashCards backend application package."""
+

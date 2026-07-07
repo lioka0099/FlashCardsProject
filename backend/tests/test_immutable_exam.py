@@ -15,7 +15,7 @@ from app.data.db_engine import drop_all_tables, init_db
 from app.data.vector_store import VectorStore
 from app.deps import get_repo
 from app.services.exams import ImmutableExamError, attach_documents, create_exam
-from app.services.ingestion import ingest_documents
+from app.services.corpus.ingestion import ingest_documents
 
 
 def _write_text_doc(name: str, body: str) -> str:

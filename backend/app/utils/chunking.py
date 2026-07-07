@@ -1,3 +1,5 @@
+"""Split ingested document text into overlapping chunks for embedding and retrieval."""
+
 from typing import Any, Dict, List, TypedDict
 
 class Chunk(TypedDict):

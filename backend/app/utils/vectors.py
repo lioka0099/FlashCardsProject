@@ -1,3 +1,5 @@
+"""Vector math helpers (L2 normalization) used by embedding/retrieval code."""
+
 from __future__ import annotations
 
 import numpy as np

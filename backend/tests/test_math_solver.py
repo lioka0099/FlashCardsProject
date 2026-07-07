@@ -1,6 +1,6 @@
 import unittest
 
-from app.services.math_solver import solve_math_problem
+from app.services.math.solver import solve_math_problem
 
 
 class MathSolverTests(unittest.TestCase):

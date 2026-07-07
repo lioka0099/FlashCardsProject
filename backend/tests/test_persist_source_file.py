@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from app.services.ingestion import _persist_source_file
+from app.services.corpus.ingestion import _persist_source_file
 
 
 class PersistSourceFileTests(unittest.TestCase):

@@ -1,7 +1,7 @@
 import unittest
 
 from app.data.db_repository import StoredCardTopic, StoredTopicProficiency
-from app.services.topic_proficiency_state import TopicProficiencyStateService
+from app.services.review.topic_proficiency_state import TopicProficiencyStateService
 
 
 def _link() -> StoredCardTopic:

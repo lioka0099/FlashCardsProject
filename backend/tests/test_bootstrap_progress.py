@@ -2,7 +2,7 @@ from unittest.mock import patch
 import pytest
 from app.data.db_engine import init_db, get_db
 from app.data.models import User
-from app.services.diagnostic_lifecycle import DiagnosticLifecycleService
+from app.services.diagnostic.lifecycle import DiagnosticLifecycleService
 
 
 def _seed_user(uid="u-prog"):
@@ -37,12 +37,12 @@ def test_run_bootstrap_reports_steps_and_marks_ready():
     class _Doc:  # minimal ingest result
         doc_id = "d1"
 
-    with patch("app.services.diagnostic_lifecycle.ingest_documents", return_value=[_Doc()]), \
+    with patch("app.services.diagnostic.lifecycle.ingest_documents", return_value=[_Doc()]), \
          patch.object(svc.repo, "attach_documents_to_exam"), \
          patch.object(svc.repo, "list_chunks_by_doc", return_value=[]), \
-         patch("app.services.diagnostic_lifecycle.classify_document_math_profile") as mp, \
-         patch("app.services.diagnostic_lifecycle.build_topics_for_exam", return_value=[1, 2, 3]), \
-         patch("app.services.diagnostic_lifecycle.generate_starter_cards_v2", return_value=[1, 2, 3]):
+         patch("app.services.diagnostic.lifecycle.classify_document_math_profile") as mp, \
+         patch("app.services.diagnostic.lifecycle.build_topics_for_exam", return_value=[1, 2, 3]), \
+         patch("app.services.diagnostic.lifecycle.generate_starter_cards_v2", return_value=[1, 2, 3]):
         mp.return_value.to_info.return_value = {}
         svc.run_bootstrap(exam_id=exam_id, user_id=uid, paths=["/tmp/a.pdf"],
                           reporter=lambda k, s, d: seen.append((k, s)))
@@ -60,7 +60,7 @@ def test_run_bootstrap_failure_marks_failed():
     uid = _seed_user("u-prog3")
     svc = DiagnosticLifecycleService()
     exam_id = svc.create_processing_exam(user_id=uid, title="T", mode="mastery", info={})
-    with patch("app.services.diagnostic_lifecycle.ingest_documents", side_effect=RuntimeError("nope")):
+    with patch("app.services.diagnostic.lifecycle.ingest_documents", side_effect=RuntimeError("nope")):
         with pytest.raises(RuntimeError):
             svc.run_bootstrap(exam_id=exam_id, user_id=uid, paths=["/tmp/a.pdf"])
     exam = svc.repo.get_exam(exam_id)

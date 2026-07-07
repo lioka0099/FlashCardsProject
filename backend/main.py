@@ -1,3 +1,6 @@
+"""Legacy command-line entrypoint for the flashcards pipeline (--ingest / --create_exam / --demo).
+Separate from the FastAPI app in app/api; kept for manual and local runs."""
+
 import argparse, json, logging, mimetypes, time, sys
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -330,14 +333,14 @@ logging.basicConfig(
     format="[%(asctime)s] %(levelname)s %(name)s: %(message)s",
 )
 
-from app.services.ingestion import UnsupportedDocumentTypeError, ingest_documents
-from app.services.retrieval import retrieve_with_proofs
+from app.services.corpus.ingestion import UnsupportedDocumentTypeError, ingest_documents
+from app.services.corpus.retrieval import retrieve_with_proofs
 from app.data.vector_store import VectorStore
-from app.services.qa import generate_answer
+from app.services.corpus.qa import generate_answer
 from app.services.exams import create_exam, load_exam, attach_documents, log_event
-from app.services.topics import build_topics_for_exam, list_topics_for_exam
-from app.services.routing import answer_in_exam, route_question_to_topic
-from app.services.cards import generate_starter_cards
+from app.services.corpus.topics import build_topics_for_exam, list_topics_for_exam
+from app.services.generation.routing import answer_in_exam, route_question_to_topic
+from app.services.generation.cards import generate_starter_cards
 
 def main():
     p = argparse.ArgumentParser()
@@ -415,8 +418,8 @@ def _run(args, store):
     if args.demo:
         # Suppress all logging for clean presentation
         logging.getLogger().setLevel(logging.CRITICAL)
-        for name in ['app.services.ingestion', 'app.services.graph', 'app.services.llm', 
-                     'app.services.topics', 'app.services.cards', 'app.services.retrieval',
+        for name in ['app.services.corpus.ingestion', 'app.services.generation.graph', 'app.services.llm',
+                     'app.services.corpus.topics', 'app.services.generation.cards', 'app.services.corpus.retrieval',
                      'app.data.vector_store', 'app.data.db', 'httpx', 'openai']:
             logging.getLogger(name).setLevel(logging.CRITICAL)
         

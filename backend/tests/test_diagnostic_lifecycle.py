@@ -17,7 +17,7 @@ from app.data.db_engine import drop_all_tables, init_db
 from app.data.vector_store import VectorStore
 from app.deps import get_repo
 from app.services.exams import create_exam
-from app.services.graph import GeneratedCard
+from app.services.generation.graph import GeneratedCard
 
 
 def _write_text_doc(name: str, body: str) -> str:
@@ -31,8 +31,8 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         drop_all_tables()
         init_db()
         self.client = TestClient(app)
-        from app.services import diagnostic_lifecycle as dl_mod
-        from app.services import ingestion as ingestion_mod
+        from app.services.diagnostic import lifecycle as dl_mod
+        from app.services.corpus import ingestion as ingestion_mod
 
         self._dl_mod = dl_mod
         self._ingestion_mod = ingestion_mod
@@ -57,7 +57,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         self._ingestion_mod.embed_texts = self._original_embed_texts  # type: ignore[assignment]
 
     def test_bootstrap_and_atomic_transition(self) -> None:
-        from app.services import diagnostic_lifecycle as dl_mod
+        from app.services.diagnostic import lifecycle as dl_mod
 
         original_build_topics = dl_mod.build_topics_for_exam
         original_generate = dl_mod.generate_starter_cards_v2
@@ -108,7 +108,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         dl_mod.generate_starter_cards_v2 = fake_generate_starter_cards_v2
         try:
             d1 = _write_text_doc("p3_bootstrap_1.txt", "alpha beta gamma")
-            from app.services.diagnostic_lifecycle import DiagnosticLifecycleService
+            from app.services.diagnostic.lifecycle import DiagnosticLifecycleService
             result = DiagnosticLifecycleService(store=VectorStore(basepath=str(_TEST_ROOT / "store"))).bootstrap_exam_from_upload(
                 user_id="u1", title="Exam 1", mode="mastery", paths=[d1],
                 info={"source": "from_upload", "filenames": ["p3_bootstrap_1.txt"]})
@@ -157,7 +157,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
             dl_mod.generate_starter_cards_v2 = original_generate
 
     def test_bootstrap_persists_math_profile_before_topic_build(self) -> None:
-        from app.services import diagnostic_lifecycle as dl_mod
+        from app.services.diagnostic import lifecycle as dl_mod
 
         original_build_topics = dl_mod.build_topics_for_exam
         original_generate = dl_mod.generate_starter_cards_v2
@@ -203,7 +203,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         dl_mod.generate_starter_cards_v2 = fake_generate_starter_cards_v2
         try:
             d1 = _write_text_doc("p3_math_profile_timing.txt", "44 examples and 100 rows, but conceptual notes.")
-            from app.services.diagnostic_lifecycle import DiagnosticLifecycleService
+            from app.services.diagnostic.lifecycle import DiagnosticLifecycleService
             DiagnosticLifecycleService(store=VectorStore(basepath=str(_TEST_ROOT / "store"))).bootstrap_exam_from_upload(
                 user_id="u-profile", title="Profile timing", mode="mastery", paths=[d1],
                 info={"source": "from_upload", "filenames": ["p3_math_profile_timing.txt"]})
@@ -215,7 +215,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         self.assertEqual(captured["math_profile"]["kind"], "non_math")
 
     def test_failed_bootstrap_cleans_up_exam_data(self) -> None:
-        from app.services import diagnostic_lifecycle as dl_mod
+        from app.services.diagnostic import lifecycle as dl_mod
 
         original_build_topics = dl_mod.build_topics_for_exam
         original_generate = dl_mod.generate_starter_cards_v2
@@ -264,7 +264,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         dl_mod.generate_starter_cards_v2 = fake_generate_partial
         try:
             d1 = _write_text_doc("p3_bootstrap_fail.txt", "alpha beta gamma")
-            from app.services.diagnostic_lifecycle import DiagnosticLifecycleService, DiagnosticBootstrapError
+            from app.services.diagnostic.lifecycle import DiagnosticLifecycleService, DiagnosticBootstrapError
             with self.assertRaises(DiagnosticBootstrapError):
                 DiagnosticLifecycleService(store=VectorStore(basepath=str(_TEST_ROOT / "store"))).bootstrap_exam_from_upload(
                     user_id="u2", title="Exam fail", mode="mastery", paths=[d1],
@@ -278,7 +278,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
             dl_mod.generate_starter_cards_v2 = original_generate
 
     def test_bootstrap_allows_coverage_at_or_above_80_percent(self) -> None:
-        from app.services import diagnostic_lifecycle as dl_mod
+        from app.services.diagnostic import lifecycle as dl_mod
 
         original_build_topics = dl_mod.build_topics_for_exam
         original_generate = dl_mod.generate_starter_cards_v2
@@ -328,7 +328,7 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         dl_mod.generate_starter_cards_v2 = fake_generate_partial_but_ok
         try:
             d1 = _write_text_doc("p3_bootstrap_80pct.txt", "alpha beta gamma")
-            from app.services.diagnostic_lifecycle import DiagnosticLifecycleService
+            from app.services.diagnostic.lifecycle import DiagnosticLifecycleService
             result = DiagnosticLifecycleService(store=VectorStore(basepath=str(_TEST_ROOT / "store"))).bootstrap_exam_from_upload(
                 user_id="u3", title="Exam 80%", mode="mastery", paths=[d1],
                 info={"source": "from_upload", "filenames": ["p3_bootstrap_80pct.txt"]})

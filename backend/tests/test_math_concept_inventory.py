@@ -1,6 +1,6 @@
 import unittest
 
-from app.services.math_concept_inventory import (
+from app.services.math.concept_inventory import (
     ConceptInventory,
     MathConceptInventoryService,
     parse_inventory_payload,

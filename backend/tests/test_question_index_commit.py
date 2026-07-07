@@ -7,7 +7,7 @@ _TEST_ROOT = Path(tempfile.mkdtemp(prefix="phase5_qindex_commit_"))
 os.environ["DATABASE_URL"] = f"sqlite:///{(_TEST_ROOT / 'meta.sqlite').as_posix()}"
 os.environ["VECTOR_BACKEND"] = "numpy"
 
-from app.services import graph as graph_mod  # noqa: E402
+from app.services.generation import graph as graph_mod  # noqa: E402
 
 
 class QuestionIndexCommitTests(unittest.TestCase):

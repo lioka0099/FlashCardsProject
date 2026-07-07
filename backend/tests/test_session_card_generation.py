@@ -3,10 +3,10 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from app.data.db_repository import StoredCard, StoredCardTopic, StoredExam, StoredTopic, StoredTopicProficiency
-from app.services.card_routing import RouteDecision
-from app.services.cards import GeneratedCard
-from app.services import session_card_generation as generation_mod
-from app.services.session_card_generation import SessionCardGenerationService
+from app.services.generation.card_routing import RouteDecision
+from app.services.generation.cards import GeneratedCard
+from app.services.session import card_generation as generation_mod
+from app.services.session.card_generation import SessionCardGenerationService
 
 
 class FakeStore:
@@ -128,12 +128,12 @@ class SessionCardGenerationTests(unittest.TestCase):
             )
 
         with (
-            patch("app.services.session_card_generation.build_diverse_chunk_pack", return_value="math context"),
+            patch("app.services.session.card_generation.build_diverse_chunk_pack", return_value="math context"),
             patch(
-                "app.services.session_card_generation.classify_card_route",
+                "app.services.session.card_generation.classify_card_route",
                 return_value=RouteDecision(card_route="math_calculation", subject_type="math", math_kind="calculation"),
             ),
-            patch("app.services.session_card_generation.generate_single_card", side_effect=fake_generate_single_card),
+            patch("app.services.session.card_generation.generate_single_card", side_effect=fake_generate_single_card),
         ):
             result = SessionCardGenerationService(repo=repo)._generate_next_card_unlocked(
                 user_id="u1",

@@ -139,6 +139,8 @@ a {
   width: 100%;
 }
 
+.app-shell__logout { margin-left: auto; background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
+
 .inline-error__message {
   margin: 0;
   font-size: 0.86rem;

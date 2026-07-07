@@ -12,6 +12,10 @@ vi.mock("@/lib/api/client", () => ({
   getPresentedHistory: (...args: unknown[]) => getPresentedHistoryMock(...args),
 }));
 
+vi.mock("@/lib/session/guest-session", () => ({
+  useGuestSession: () => ({ userId: "guest" }),
+}));
+
 function renderHistory() {
   const queryClient = new QueryClient();
   return render(

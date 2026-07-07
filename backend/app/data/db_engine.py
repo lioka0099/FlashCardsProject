@@ -185,6 +185,9 @@ def _apply_sqlite_compat_migrations() -> None:
         "last_updated_at": "ALTER TABLE topic_proficiency ADD COLUMN last_updated_at DATETIME",
         "info": "ALTER TABLE topic_proficiency ADD COLUMN info JSON",
     }
+    required_user_columns = {
+        "password_hash": "ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)",
+    }
 
     with engine.begin() as conn:
         exam_rows = conn.execute(text("PRAGMA table_info(exams)")).mappings().all()
@@ -218,6 +221,14 @@ def _apply_sqlite_compat_migrations() -> None:
                 if col not in existing_prof:
                     conn.execute(text(ddl))
                     logger.warning("Applied SQLite compatibility migration: added topic_proficiency.%s", col)
+
+        user_rows = conn.execute(text("PRAGMA table_info(users)")).mappings().all()
+        if user_rows:
+            existing_users = {str(r["name"]) for r in user_rows}
+            for col, ddl in required_user_columns.items():
+                if col not in existing_users:
+                    conn.execute(text(ddl))
+                    logger.warning("Applied SQLite compatibility migration: added users.%s", col)
 
 
 def drop_all_tables() -> None:

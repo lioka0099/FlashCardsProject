@@ -42,7 +42,14 @@ export default function LoginPage() {
   return (
     <main className="login">
       <form className="login__card" onSubmit={onSubmit}>
+        <div className="login__brand">
+          <span className="login__brand-mark" aria-hidden />
+          <span className="login__brand-name">FlashCards Studio</span>
+        </div>
         <h1 className="login__title">{mode === "login" ? "Welcome back" : "Create your account"}</h1>
+        <p className="login__subtitle">
+          {mode === "login" ? "Log in to pick up where you left off." : "Set up your account to start building decks."}
+        </p>
 
         {mode === "register" && (
           <label className="login__field">

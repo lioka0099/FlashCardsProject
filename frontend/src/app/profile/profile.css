@@ -1,16 +1,141 @@
-.profile { max-width: 480px; margin: 2rem auto; padding: 0 1rem; display: flex; flex-direction: column; gap: 1.25rem; }
-.profile__title { margin: 0; font-size: 1.5rem; }
-.profile__details { display: flex; flex-direction: column; gap: 0.75rem; margin: 0; }
-.profile__details div { display: flex; justify-content: space-between; border-bottom: 1px solid var(--border, #e5e7eb); padding-bottom: 0.5rem; }
-.profile__details dt { color: var(--muted, #6b7280); }
-.profile__details dd { margin: 0; font-weight: 500; }
-.profile__error { color: var(--danger, #dc2626); }
+/* Account page. Scoped palette mirrors the home dashboard (.dash) so it matches
+   the current design system instead of the global blue tokens. */
+
+.profile {
+  --p: #6f42c1;
+  --p-strong: #5b34a8;
+  --p-soft: #ede7f8;
+  --n900: #0f172a;
+  --n700: #334155;
+  --n500: #64748b;
+  --card: #ffffff;
+  --line: #ececf3;
+  --err: #ef4444;
+  --err-soft: #fdeaea;
+  --grad-p: linear-gradient(135deg, #6f42c1, #a78bfa);
+  --shadow-card: 0 18px 50px rgba(15, 23, 42, 0.07);
+  --shadow-pop: 0 14px 36px rgba(111, 66, 193, 0.18);
+
+  width: min(100%, 34rem);
+  margin: 2.5rem auto;
+  padding: 0 1.25rem;
+}
+
+.profile__card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.profile__head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.profile__avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 16px;
+  background: var(--grad-p);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 800;
+  box-shadow: var(--shadow-pop);
+}
+
+.profile__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--n900);
+}
+
+.profile__subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.9rem;
+  color: var(--n500);
+}
+
+.profile__muted {
+  margin: 0;
+  color: var(--n500);
+}
+
+.profile__details {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.profile__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem;
+}
+
+.profile__row + .profile__row {
+  border-top: 1px solid var(--line);
+}
+
+.profile__row dt {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--n500);
+}
+
+.profile__row dd {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--n900);
+  text-align: right;
+  word-break: break-word;
+}
+
+.profile__error {
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+  border-radius: 12px;
+  background: var(--err-soft);
+  color: var(--err);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .profile__logout {
   align-self: flex-start;
-  padding: 0.6rem 1rem;
-  border-radius: 8px;
-  border: 1px solid var(--border, #d1d5db);
-  background: none;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--n700);
   cursor: pointer;
+  padding: 0.7rem 1.2rem;
+  border-radius: 12px;
   font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.profile__logout:hover {
+  border-color: color-mix(in srgb, var(--err) 45%, var(--line));
+  background: var(--err-soft);
+  color: var(--err);
 }

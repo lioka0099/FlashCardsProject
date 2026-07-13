@@ -169,13 +169,22 @@ def _is_pdf_ref(ref: str) -> bool:
     return (ref or "").lower().split("?")[0].split("#")[0].rstrip().endswith(".pdf")
 
 
+def _is_txt_ref(ref: str) -> bool:
+    """True when a document reference (a stored file path or an http doc_id URL)
+    points at a plain-text file. Used alongside _is_pdf_ref so the frontend can
+    tell DOCX (download only) apart from TXT (rendered in-app like PDF)."""
+    return (ref or "").lower().split("?")[0].split("#")[0].rstrip().endswith(".txt")
+
+
 def _card_to_response(repo: DBRepository, card_id: str) -> Optional[CardResponse]:
     card = repo.get_card(card_id=card_id)
     if card is None:
         return None
     topic_map = {t.topic_id: t.label for t in repo.list_topics(exam_id=card.exam_id)}
-    proofs = [
-        ProofSpan(
+    proofs = []
+    for p in repo.list_card_proofs(card_id=card.card_id):
+        ref = repo.get_document_path(doc_id=p.doc_id) or p.doc_id
+        proofs.append(ProofSpan(
             proof_id=p.proof_id,
             doc_id=p.doc_id,
             page=p.page,
@@ -183,10 +192,9 @@ def _card_to_response(repo: DBRepository, card_id: str) -> Optional[CardResponse
             end=p.end,
             text=p.text,
             score=float(p.score or 0.0),
-            is_pdf=_is_pdf_ref(repo.get_document_path(doc_id=p.doc_id) or p.doc_id),
-        )
-        for p in repo.list_card_proofs(card_id=card.card_id)
-    ]
+            is_pdf=_is_pdf_ref(ref),
+            is_txt=_is_txt_ref(ref),
+        ))
     return CardResponse(
         card_id=card.card_id,
         exam_id=card.exam_id,

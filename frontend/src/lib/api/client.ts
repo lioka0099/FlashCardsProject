@@ -123,6 +123,7 @@ export type ProofSpan = {
   text: string;
   score: number;
   is_pdf?: boolean;
+  is_txt?: boolean;
 };
 
 export type Card = {

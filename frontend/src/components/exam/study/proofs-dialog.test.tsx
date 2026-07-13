@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProofsDialog } from "@/components/exam/study/proofs-dialog";
 import type { Card } from "@/lib/api/client";
@@ -7,6 +7,17 @@ vi.mock("@/components/exam/study/pdf-source-modal", () => ({
   PdfSourceModal: ({ proof }: { proof: { doc_id: string } }) => (
     <div data-testid="pdf-modal">modal:{proof.doc_id}</div>
   ),
+}));
+
+vi.mock("@/components/exam/study/text-source-modal", () => ({
+  TextSourceModal: ({ proof }: { proof: { doc_id: string } }) => (
+    <div data-testid="text-modal">modal:{proof.doc_id}</div>
+  ),
+}));
+
+const fetchSourceBlobMock = vi.fn();
+vi.mock("@/components/exam/lib/fetch-source-blob", () => ({
+  fetchSourceBlob: (...args: unknown[]) => fetchSourceBlobMock(...args),
 }));
 
 function buildCard(overrides?: Partial<Card>): Card {
@@ -152,8 +163,54 @@ describe("ProofsDialog", () => {
     expect(screen.queryByTestId("pdf-modal")).toBeNull();
   });
 
-  it("opens non-PDF sources in a new tab instead of the modal", () => {
-    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+  it("opens TXT sources in the text modal", async () => {
+    render(
+      <ProofsDialog
+        isOpen
+        card={buildCard({
+          proofs: [
+            {
+              doc_id: "notes.txt",
+              page: null,
+              start: 0,
+              end: 0,
+              text: "Some notes",
+              score: 0.5,
+              is_pdf: false,
+              is_txt: true,
+            },
+          ],
+        })}
+        userId="guest"
+        onClose={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /source 1/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open the source/i }));
+
+    expect(await screen.findByTestId("text-modal")).toHaveTextContent("modal:notes.txt");
+  });
+
+  it("downloads DOCX sources instead of opening a modal", async () => {
+    const blob = new Blob(["docx bytes"]);
+    fetchSourceBlobMock.mockResolvedValue(blob);
+    // URL.createObjectURL/revokeObjectURL don't exist in jsdom by default, so
+    // they're assigned directly rather than spied on or stubbed as a whole
+    // (spreading `URL` would lose its constructor, breaking `new URL(...)`
+    // inside buildSourceUrl).
+    const createObjectURL = vi.fn().mockReturnValue("blob:fake-url");
+    const revokeObjectURL = vi.fn();
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
+    const clickSpy = vi.fn();
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      const el = originalCreateElement(tag);
+      if (tag === "a") el.click = clickSpy;
+      return el;
+    });
+
     render(
       <ProofsDialog
         isOpen
@@ -167,6 +224,7 @@ describe("ProofsDialog", () => {
               text: "Some notes",
               score: 0.5,
               is_pdf: false,
+              is_txt: false,
             },
           ],
         })}
@@ -178,11 +236,49 @@ describe("ProofsDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /source 1/i }));
     fireEvent.click(screen.getByRole("button", { name: /open the source/i }));
 
-    expect(screen.queryByTestId("pdf-modal")).toBeNull();
-    expect(openSpy).toHaveBeenCalledTimes(1);
-    expect(openSpy.mock.calls[0][0]).toContain(
-      "/documents/notes.docx/source?exam_id=exam-1&user_id=guest",
+    await waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
+    expect(fetchSourceBlobMock).toHaveBeenCalledWith(
+      expect.stringContaining("/documents/notes.docx/source?exam_id=exam-1&user_id=guest"),
     );
-    openSpy.mockRestore();
+    expect(createObjectURL).toHaveBeenCalledWith(blob);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:fake-url");
+
+    expect(screen.queryByTestId("pdf-modal")).toBeNull();
+    expect(screen.queryByTestId("text-modal")).toBeNull();
+
+    vi.restoreAllMocks();
+    delete (URL as { createObjectURL?: unknown }).createObjectURL;
+    delete (URL as { revokeObjectURL?: unknown }).revokeObjectURL;
+  });
+
+  it("shows an inline error when the DOCX download fails", async () => {
+    fetchSourceBlobMock.mockRejectedValue(new Error("Failed to fetch source document (401)"));
+
+    render(
+      <ProofsDialog
+        isOpen
+        card={buildCard({
+          proofs: [
+            {
+              doc_id: "notes.docx",
+              page: null,
+              start: 0,
+              end: 0,
+              text: "Some notes",
+              score: 0.5,
+              is_pdf: false,
+              is_txt: false,
+            },
+          ],
+        })}
+        userId="guest"
+        onClose={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /source 1/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open the source/i }));
+
+    expect(await screen.findByText("Could not download the source.")).toBeInTheDocument();
   });
 });

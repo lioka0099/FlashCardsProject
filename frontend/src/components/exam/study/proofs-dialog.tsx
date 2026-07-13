@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { Card, ProofSpan } from "@/lib/api/client";
 import dynamic from "next/dynamic";
 import { buildSourceUrl } from "@/components/exam/lib/pdf-source-url";
+import { fetchSourceBlob } from "@/components/exam/lib/fetch-source-blob";
+import { TextSourceModal } from "@/components/exam/study/text-source-modal";
 
 // react-pdf (pdf.js) touches browser-only globals (DOMMatrix) at module load,
 // so it must never evaluate during SSR. Load the modal client-only.
@@ -13,6 +15,26 @@ const PdfSourceModal = dynamic(
   () => import("@/components/exam/study/pdf-source-modal").then((m) => m.PdfSourceModal),
   { ssr: false },
 );
+
+function downloadFilename(docId: string): string {
+  const base = docId.split("/").pop() || "document";
+  return base.toLowerCase().endsWith(".docx") ? base : `${base}.docx`;
+}
+
+async function downloadSource(proof: ProofSpan, card: Card, userId: string): Promise<void> {
+  const blob = await fetchSourceBlob(buildSourceUrl(proof, card, userId));
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = downloadFilename(proof.doc_id);
+  try {
+    document.body.appendChild(link);
+    link.click();
+  } finally {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+}
 
 type ProofsDialogProps = {
   isOpen: boolean;
@@ -28,11 +50,15 @@ export function ProofsDialog({
   onClose,
 }: ProofsDialogProps) {
   const [openProofKeys, setOpenProofKeys] = useState<Set<string>>(new Set());
-  const [sourceProof, setSourceProof] = useState<ProofSpan | null>(null);
+  const [openSourceModal, setOpenSourceModal] = useState<
+    { kind: "pdf" | "text"; proof: ProofSpan } | null
+  >(null);
+  const [downloadErrorKey, setDownloadErrorKey] = useState<string | null>(null);
 
   const closeDialog = useCallback(() => {
     setOpenProofKeys(new Set());
-    setSourceProof(null);
+    setOpenSourceModal(null);
+    setDownloadErrorKey(null);
     onClose();
   }, [onClose]);
 
@@ -155,18 +181,26 @@ export function ProofsDialog({
                             <button
                               className="evidence__jump"
                               type="button"
-                              onClick={() =>
-                                proof.is_pdf === false
-                                  ? window.open(
-                                      buildSourceUrl(proof, card, userId),
-                                      "_blank",
-                                      "noopener,noreferrer",
-                                    )
-                                  : setSourceProof(proof)
-                              }
+                              onClick={() => {
+                                if (proof.is_pdf !== false) {
+                                  setOpenSourceModal({ kind: "pdf", proof });
+                                } else if (proof.is_txt) {
+                                  setOpenSourceModal({ kind: "text", proof });
+                                } else {
+                                  setDownloadErrorKey(null);
+                                  downloadSource(proof, card, userId).catch(() =>
+                                    setDownloadErrorKey(proofKey),
+                                  );
+                                }
+                              }}
                             >
                               Open the source
                             </button>
+                            {downloadErrorKey === proofKey ? (
+                              <p className="evidence__download-error">
+                                Could not download the source.
+                              </p>
+                            ) : null}
                           </div>
                         </motion.div>
                       ) : null}
@@ -177,12 +211,20 @@ export function ProofsDialog({
             </ul>
           )}
         </div>
-        {sourceProof ? (
+        {openSourceModal?.kind === "pdf" ? (
           <PdfSourceModal
-            proof={sourceProof}
+            proof={openSourceModal.proof}
             card={card}
             userId={userId}
-            onClose={() => setSourceProof(null)}
+            onClose={() => setOpenSourceModal(null)}
+          />
+        ) : null}
+        {openSourceModal?.kind === "text" ? (
+          <TextSourceModal
+            proof={openSourceModal.proof}
+            card={card}
+            userId={userId}
+            onClose={() => setOpenSourceModal(null)}
           />
         ) : null}
       </motion.section>

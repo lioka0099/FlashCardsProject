@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import type { TextContent, TextItem } from "react-pdf";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -9,6 +9,7 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 import type { Card, ProofSpan } from "@/lib/api/client";
 import { buildSourceUrl } from "@/components/exam/lib/pdf-source-url";
 import { computeHighlightItemIndices } from "@/components/exam/lib/pdf-highlight";
+import { fetchSourceBlob } from "@/components/exam/lib/fetch-source-blob";
 
 // Self-host the pdf.js worker from the installed pdfjs-dist so its version
 // always matches and there is no network/CDN dependency. Turbopack/Webpack
@@ -41,6 +42,14 @@ export function PdfSourceModal({ proof, card, userId, onClose }: PdfSourceModalP
   const fileUrl = buildSourceUrl(proof, card, userId);
   const citedPage = proof.page ?? 1;
 
+  const [fileData, setFileData] = useState<ArrayBuffer | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  // react-pdf resets/reloads the document whenever `file` changes by
+  // *reference* (see react-pdf's own Document source), so this must stay
+  // referentially stable across re-renders that don't change the bytes —
+  // otherwise every setNumPages/forceRepaint re-render would re-trigger a
+  // full PDF reload.
+  const file = useMemo(() => (fileData ? { data: fileData } : null), [fileData]);
   const [numPages, setNumPages] = useState(0);
   const markSet = useRef<Set<number>>(new Set());
   const computed = useRef(false);
@@ -58,6 +67,23 @@ export function PdfSourceModal({ proof, card, userId, onClose }: PdfSourceModalP
     renderedCount.current = 0;
     scrolled.current = false;
   }, [proof.text, fileUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setFileData(null);
+    setLoadError(false);
+    fetchSourceBlob(fileUrl)
+      .then((blob) => blob.arrayBuffer())
+      .then((buffer) => {
+        if (!cancelled) setFileData(buffer);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fileUrl]);
 
   const handleTextSuccess = useCallback(
     (textContent: TextContent) => {
@@ -117,39 +143,44 @@ export function PdfSourceModal({ proof, card, userId, onClose }: PdfSourceModalP
           </button>
         </header>
         <div className="pdf-modal__body">
-          <Document
-            file={fileUrl}
-            loading="Loading document…"
-            error="Could not load the source document."
-            onLoadSuccess={({ numPages: n }) => setNumPages(n)}
-          >
-            {Array.from({ length: numPages }, (_, i) => {
-              const pageNumber = i + 1;
-              const isCited = pageNumber === citedPage;
-              return (
-                <div
-                  key={pageNumber}
-                  ref={isCited ? citedRef : undefined}
-                  className="pdf-page-wrap"
-                >
-                  <Page
-                    pageNumber={pageNumber}
-                    width={PAGE_WIDTH}
-                    onRenderSuccess={handlePageRender}
-                    onGetTextSuccess={isCited ? handleTextSuccess : undefined}
-                    customTextRenderer={
-                      isCited
-                        ? ({ str, itemIndex }) =>
-                            markSet.current.has(itemIndex)
-                              ? `<mark class="pdf-highlight">${escapeHtml(str)}</mark>`
-                              : escapeHtml(str)
-                        : undefined
-                    }
-                  />
-                </div>
-              );
-            })}
-          </Document>
+          {loadError ? (
+            "Could not load the source document."
+          ) : !file ? (
+            "Loading document…"
+          ) : (
+            <Document
+              file={file}
+              onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+              onLoadError={() => setLoadError(true)}
+            >
+              {Array.from({ length: numPages }, (_, i) => {
+                const pageNumber = i + 1;
+                const isCited = pageNumber === citedPage;
+                return (
+                  <div
+                    key={pageNumber}
+                    ref={isCited ? citedRef : undefined}
+                    className="pdf-page-wrap"
+                  >
+                    <Page
+                      pageNumber={pageNumber}
+                      width={PAGE_WIDTH}
+                      onRenderSuccess={handlePageRender}
+                      onGetTextSuccess={isCited ? handleTextSuccess : undefined}
+                      customTextRenderer={
+                        isCited
+                          ? ({ str, itemIndex }) =>
+                              markSet.current.has(itemIndex)
+                                ? `<mark class="pdf-highlight">${escapeHtml(str)}</mark>`
+                                : escapeHtml(str)
+                          : undefined
+                      }
+                    />
+                  </div>
+                );
+              })}
+            </Document>
+          )}
         </div>
       </motion.section>
     </motion.div>

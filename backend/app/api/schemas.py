@@ -133,6 +133,7 @@ class ProofSpan(BaseModel):
     text: str
     score: float = 0.0
     is_pdf: bool = True
+    is_txt: bool = False
 
 
 class CardResponse(BaseModel):

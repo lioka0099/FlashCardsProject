@@ -347,6 +347,7 @@
   font-size: .85rem; font-weight: 700; padding: .5rem .9rem;
 }
 .evidence__jump:hover { background: color-mix(in srgb, var(--p) 8%, #fff); }
+.evidence__download-error { margin: 0; font-size: .78rem; color: var(--danger); }
 
 /* Empty state */
 .stage--empty { align-items: center; text-align: center; padding-top: 3rem; }
@@ -427,4 +428,17 @@
   background: rgba(250, 204, 21, 0.45);
   color: inherit;
   border-radius: 2px;
+}
+.text-modal__body {
+  display: block;
+  align-items: initial;
+  text-align: left;
+  color: #e2e8f0;
+  line-height: 1.6;
+}
+.text-modal__paragraph {
+  margin: 0 0 0.75rem;
+}
+.text-modal__paragraph:last-child {
+  margin-bottom: 0;
 }

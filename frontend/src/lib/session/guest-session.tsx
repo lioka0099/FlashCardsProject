@@ -1,23 +1,32 @@
 "use client";
 
-import { createContext, useContext, type PropsWithChildren } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { createContext, useContext, useEffect, useState, type PropsWithChildren } from "react";
+import { getToken, decodeUserId } from "@/lib/session/token";
 
-type GuestSession = {
-  userId: string;
-  mode: "guest";
-};
+type Session = { userId: string };
 
-const DEFAULT_GUEST_SESSION: GuestSession = {
-  userId: "guest",
-  mode: "guest",
-};
-
-const GuestSessionContext = createContext<GuestSession>(DEFAULT_GUEST_SESSION);
+const SessionContext = createContext<Session>({ userId: "" });
 
 export function GuestSessionProvider({ children }: PropsWithChildren) {
-  return <GuestSessionContext.Provider value={DEFAULT_GUEST_SESSION}>{children}</GuestSessionContext.Provider>;
+  const router = useRouter();
+  const pathname = usePathname();
+  const [userId, setUserId] = useState<string>("");
+
+  useEffect(() => {
+    const token = getToken();
+    const uid = token ? decodeUserId(token) : null;
+    if (!uid) {
+      if (pathname !== "/login") router.replace("/login");
+      return;
+    }
+    setUserId(uid);
+  }, [pathname, router]);
+
+  return <SessionContext.Provider value={{ userId }}>{children}</SessionContext.Provider>;
 }
 
+// Name kept for backward compatibility with existing consumers.
 export function useGuestSession() {
-  return useContext(GuestSessionContext);
+  return useContext(SessionContext);
 }

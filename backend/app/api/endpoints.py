@@ -4,7 +4,7 @@ Wires requests to the service layer via app/deps."""
 import os
 
 try:
-    from fastapi import BackgroundTasks, Body, FastAPI, File, Form, Header, Query, Request, UploadFile  # type: ignore
+    from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile  # type: ignore
     from fastapi.middleware.cors import CORSMiddleware  # type: ignore
     from fastapi.responses import FileResponse, JSONResponse  # type: ignore
 except Exception as exc:
@@ -17,6 +17,9 @@ from pathlib import Path
 import shutil
 from typing import Any, Dict, List, Optional
 
+import uuid
+
+from app.api import auth
 from app.api.schemas import (
     CardListResponse,
     CardResponse,
@@ -24,8 +27,10 @@ from app.api.schemas import (
     ExamResponse,
     GenerateSingleCardRequest,
     GenerateSingleCardResponse,
+    LoginRequest,
     NextCardResponse,
     ProofSpan,
+    RegisterRequest,
     ReviewCardRequest,
     SessionEventRequest,
     SessionEventResponse,
@@ -36,7 +41,7 @@ from app.api.schemas import (
 )
 from app.data.db_engine import get_db
 from app.data.db_repository import DBRepository
-from app.data.models import CardReview
+from app.data.models import CardReview, User
 from app.deps import get_repo, get_store
 from app.services.diagnostic.lifecycle import DiagnosticBootstrapError, DiagnosticLifecycleService
 from app.services.exams import ImmutableExamError
@@ -95,6 +100,42 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.post("/auth/register")
+def register_endpoint(req: RegisterRequest):
+    with get_db() as db:
+        if db.query(User).filter(User.email == req.email).first():
+            raise HTTPException(status_code=409, detail="Email already registered")
+        user = User(
+            user_id=uuid.uuid4().hex,
+            email=req.email,
+            name=req.name,
+            password_hash=auth.hash_password(req.password),
+        )
+        db.add(user)
+        db.flush()
+        user_id = user.user_id
+    return {"token": auth.issue_token(user_id), "user_id": user_id}
+
+
+@app.post("/auth/login")
+def login_endpoint(req: LoginRequest):
+    with get_db() as db:
+        user = db.query(User).filter(User.email == req.email).first()
+        if not user or not user.password_hash or not auth.verify_password(req.password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        user_id = user.user_id
+    return {"token": auth.issue_token(user_id), "user_id": user_id}
+
+
+@app.get("/auth/me")
+def me_endpoint(user_id: str = Depends(auth.get_current_user)):
+    with get_db() as db:
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {"user_id": user.user_id, "email": user.email, "name": user.name}
 
 
 def _immutable_exam_error_payload(*, exam_id: Optional[str] = None, message: str) -> Dict[str, Any]:
@@ -190,9 +231,9 @@ SUPPORTED_UPLOAD_EXTENSIONS = (".pdf", ".docx", ".txt")
 @app.post("/exams/from-upload")
 async def create_exam_from_upload_endpoint(
     files: List[UploadFile] = File(...),
-    user_id: str = Form(...),
     title: str = Form(...),
     mode: str = Form(default="mastery"),
+    user_id: str = Depends(auth.get_current_user),
 ):
     for f in files:
         name = (f.filename or "").lower()
@@ -220,8 +261,8 @@ async def create_exam_from_upload_endpoint(
 
 @app.get("/exams", response_model=ExamListResponse)
 async def list_exams_endpoint(
-    user_id: str = Query(...),
     limit: int = Query(default=50, ge=1, le=500),
+    user_id: str = Depends(auth.get_current_user),
 ):
     repo = get_repo()
     exams = repo.list_exams(user_id=user_id, limit=limit)
@@ -237,7 +278,7 @@ async def list_exams_endpoint(
 
 
 @app.get("/exams/{exam_id}")
-async def get_exam_endpoint(exam_id: str, user_id: str = Query(...)):
+async def get_exam_endpoint(exam_id: str, user_id: str = Depends(auth.get_current_user)):
     repo = get_repo()
     exam = repo.get_exam(exam_id)
     if exam is None:
@@ -261,8 +302,13 @@ async def get_exam_endpoint(exam_id: str, user_id: str = Query(...)):
 
 
 @app.get("/exams/{exam_id}/topics", response_model=TopicListResponse)
-async def list_topics_endpoint(exam_id: str):
+async def list_topics_endpoint(exam_id: str, user_id: str = Depends(auth.get_current_user)):
     repo = get_repo()
+    exam = repo.get_exam(exam_id)
+    if exam is None:
+        return JSONResponse({"error": f"Exam not found: {exam_id}"}, status_code=404)
+    if exam.user_id != user_id:
+        return JSONResponse({"error": "Exam does not belong to user"}, status_code=403)
     rows = repo.list_topics(exam_id=exam_id)
     topics: List[TopicResponse] = []
     for t in rows:
@@ -280,12 +326,19 @@ async def list_topics_endpoint(exam_id: str):
 
 
 @app.post("/exams/{exam_id}/topics/{topic_id}/cards/generate", response_model=GenerateSingleCardResponse)
-async def generate_single_card_endpoint(exam_id: str, topic_id: str, req: GenerateSingleCardRequest):
+async def generate_single_card_endpoint(
+    exam_id: str,
+    topic_id: str,
+    req: GenerateSingleCardRequest,
+    user_id: str = Depends(auth.get_current_user),
+):
     repo = get_repo()
     store = get_store()
     exam = repo.get_exam(exam_id)
     if exam is None:
         return GenerateSingleCardResponse(card=None, error=f"Exam not found: {exam_id}")
+    if exam.user_id != user_id:
+        return GenerateSingleCardResponse(card=None, error="Exam does not belong to user")
     if store.vector_backend == "pinecone":
         store = store.for_namespace(f"u:{exam.user_id}|e:{exam_id}")
     topic_map = {t.topic_id: t for t in repo.list_topics(exam_id=exam_id)}
@@ -310,7 +363,7 @@ async def generate_single_card_endpoint(exam_id: str, topic_id: str, req: Genera
             context_pack=context_pack,
             difficulty=req.difficulty,
             card_type="learning",
-            user_id=req.user_id,
+            user_id=user_id,
             store=store,
         )
     except Exception as exc:
@@ -325,8 +378,14 @@ async def generate_single_card_endpoint(exam_id: str, topic_id: str, req: Genera
 async def list_cards_endpoint(
     exam_id: str,
     limit: int = Query(default=200, ge=1, le=1000),
+    user_id: str = Depends(auth.get_current_user),
 ):
     repo = get_repo()
+    exam = repo.get_exam(exam_id)
+    if exam is None:
+        return JSONResponse({"error": f"Exam not found: {exam_id}"}, status_code=404)
+    if exam.user_id != user_id:
+        return JSONResponse({"error": "Exam does not belong to user"}, status_code=403)
     rows = repo.list_cards_for_exam(exam_id=exam_id, limit=limit)
     cards: List[CardResponse] = []
     for row in rows:
@@ -340,7 +399,7 @@ async def list_cards_endpoint(
 async def next_card_endpoint(
     exam_id: str,
     background_tasks: BackgroundTasks,
-    user_id: str = Query(...),
+    user_id: str = Depends(auth.get_current_user),
 ):
     repo = get_repo()
     store = get_store()
@@ -407,7 +466,7 @@ async def next_card_endpoint(
 
 
 @app.get("/exams/{exam_id}/session/previous-card", response_model=NextCardResponse)
-async def previous_card_endpoint(exam_id: str, user_id: str = Query(...)):
+async def previous_card_endpoint(exam_id: str, user_id: str = Depends(auth.get_current_user)):
     repo = get_repo()
     latest = repo.get_latest_presentation(user_id=user_id, exam_id=exam_id)
     if latest is None:
@@ -426,8 +485,8 @@ async def previous_card_endpoint(exam_id: str, user_id: str = Query(...)):
 @app.get("/exams/{exam_id}/cards/presented-history", response_model=CardListResponse)
 async def presented_history_endpoint(
     exam_id: str,
-    user_id: str = Query(...),
     limit: int = Query(default=500, ge=1, le=1000),
+    user_id: str = Depends(auth.get_current_user),
 ):
     repo = get_repo()
     rows = repo.list_presentations(user_id=user_id, exam_id=exam_id, ascending=False, limit=limit)
@@ -478,7 +537,11 @@ async def presented_history_endpoint(
 
 
 @app.get("/documents/{doc_id}/source")
-async def document_source_endpoint(doc_id: str, exam_id: str = Query(...), user_id: str = Query(...)):
+async def document_source_endpoint(
+    doc_id: str,
+    exam_id: str = Query(...),
+    user_id: str = Depends(auth.get_current_user),
+):
     repo = get_repo()
     exam = repo.get_exam(exam_id)
     if exam is None:
@@ -514,22 +577,20 @@ async def review_card_endpoint(
     background_tasks: BackgroundTasks,
     request: Request,
     body: Optional[ReviewCardRequest] = Body(default=None),
-    user_id: Optional[str] = Form(default=None),
     rating: Optional[str] = Form(default=None),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    user_id: str = Depends(auth.get_current_user),
 ):
-    parsed_user_id = user_id
     parsed_rating = rating
     if body is not None:
-        parsed_user_id = body.user_id
         parsed_rating = body.rating
-    if not parsed_user_id or not parsed_rating:
+    if not parsed_rating:
         if request.headers.get("content-type", "").startswith("application/json"):
             payload = await request.json()
-            parsed_user_id = parsed_user_id or payload.get("user_id")
             parsed_rating = parsed_rating or payload.get("rating")
-    if not parsed_user_id or not parsed_rating:
-        return JSONResponse({"error": "Missing user_id or rating"}, status_code=422)
+    if not parsed_rating:
+        return JSONResponse({"error": "Missing rating"}, status_code=422)
+    parsed_user_id = user_id
 
     key = (idempotency_key or "").strip() or (
         f"{parsed_user_id}:{exam_id}:{card_id}:{parsed_rating}:{datetime.now(timezone.utc).isoformat()}"
@@ -577,10 +638,14 @@ async def review_card_endpoint(
 
 
 @app.post("/exams/{exam_id}/session/event", response_model=SessionEventResponse)
-async def session_event_endpoint(exam_id: str, req: SessionEventRequest):
+async def session_event_endpoint(
+    exam_id: str,
+    req: SessionEventRequest,
+    user_id: str = Depends(auth.get_current_user),
+):
     repo = get_repo()
     event_id = repo.add_event(
-        user_id=req.user_id,
+        user_id=user_id,
         exam_id=exam_id,
         type=req.event_type,
         payload=req.payload or {},
@@ -589,7 +654,7 @@ async def session_event_endpoint(exam_id: str, req: SessionEventRequest):
 
 
 @app.get("/exams/{exam_id}/progress", response_model=TopicProgressResponse)
-async def topic_progress_endpoint(exam_id: str, user_id: str = Query(...)):
+async def topic_progress_endpoint(exam_id: str, user_id: str = Depends(auth.get_current_user)):
     repo = get_repo()
     topics = {t.topic_id: t for t in repo.list_topics(exam_id=exam_id)}
     prof_rows = repo.list_topic_proficiencies(user_id=user_id, exam_id=exam_id)

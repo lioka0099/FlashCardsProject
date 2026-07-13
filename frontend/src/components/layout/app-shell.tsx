@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { PropsWithChildren } from "react";
+import { logout } from "@/lib/api/auth";
 
 export function AppShell({ children }: PropsWithChildren) {
   // Home, the test-creation loading screen, the study screen, and the history
@@ -12,7 +13,12 @@ export function AppShell({ children }: PropsWithChildren) {
   const isStudyScreen = /^\/exams\/[^/]+$/.test(pathname);
   const isHistoryScreen = /^\/exams\/[^/]+\/history$/.test(pathname);
   const showHeader =
-    pathname !== "/" && !pathname.endsWith("/creating") && !isStudyScreen && !isHistoryScreen;
+    pathname !== "/" &&
+    pathname !== "/login" &&
+    pathname !== "/profile" &&
+    !pathname.endsWith("/creating") &&
+    !isStudyScreen &&
+    !isHistoryScreen;
 
   return (
     <div className="app-shell">
@@ -21,6 +27,9 @@ export function AppShell({ children }: PropsWithChildren) {
           <Link href="/" className="app-shell__brand app-shell__brand-link cursor-pointer" aria-label="Go to home">
             FlashCards Studio
           </Link>
+          <button type="button" className="app-shell__logout" onClick={logout}>
+            Log out
+          </button>
         </header>
       ) : null}
       <main className="app-shell__main">{children}</main>

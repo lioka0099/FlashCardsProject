@@ -1,6 +1,9 @@
 const FORBIDDEN_GENERATE_ENDPOINT = /\/exams\/[^/]+\/topics\/[^/]+\/cards\/generate\/?$/;
 
 export const apiEndpoints = {
+  authRegister: "/auth/register",
+  authLogin: "/auth/login",
+  authMe: "/auth/me",
   exams: "/exams",
   examById: (examId: string) => `/exams/${examId}`,
   examFromUpload: "/exams/from-upload",

@@ -36,6 +36,10 @@ vi.mock("@/components/exam/study/proofs-dialog", () => ({
   ProofsDialog: () => null,
 }));
 
+vi.mock("@/lib/session/guest-session", () => ({
+  useGuestSession: () => ({ userId: "guest" }),
+}));
+
 function buildCard(id: string, question: string): Card {
   return {
     card_id: id,

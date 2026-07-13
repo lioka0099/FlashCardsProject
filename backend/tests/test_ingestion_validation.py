@@ -10,6 +10,7 @@ os.environ["VECTOR_BACKEND"] = "numpy"
 
 from fastapi.testclient import TestClient
 
+from app.api.auth import get_current_user
 from app.api.endpoints import app
 from app.data.db_engine import drop_all_tables, init_db
 from app.data.vector_store import VectorStore
@@ -28,6 +29,10 @@ class IngestionValidationTests(unittest.TestCase):
         init_db()
         self.store = VectorStore(basepath=str(_TEST_ROOT / "store"))
         self.client = TestClient(app)
+        app.dependency_overrides[get_current_user] = lambda: "u-invalid"
+
+    def tearDown(self) -> None:
+        app.dependency_overrides.pop(get_current_user, None)
 
     def test_ingest_documents_rejects_unsupported_extension(self) -> None:
         bad_doc = _write_file("unsupported.csv", "a,b,c\n1,2,3")

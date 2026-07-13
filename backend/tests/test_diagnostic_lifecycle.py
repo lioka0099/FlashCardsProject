@@ -12,6 +12,7 @@ os.environ["VECTOR_BACKEND"] = "numpy"
 
 from fastapi.testclient import TestClient
 
+from app.api.auth import get_current_user
 from app.api.endpoints import app
 from app.data.db_engine import drop_all_tables, init_db
 from app.data.vector_store import VectorStore
@@ -52,9 +53,12 @@ class DiagnosticLifecycleTests(unittest.TestCase):
         dl_mod.classify_document_math_profile = lambda **_kwargs: FakeMathProfile()  # type: ignore[assignment]
         ingestion_mod.embed_texts = lambda texts: np.ones((len(texts), 3072), dtype="float32")  # type: ignore[assignment]
 
+        app.dependency_overrides[get_current_user] = lambda: "u1"
+
     def tearDown(self) -> None:
         self._dl_mod.classify_document_math_profile = self._original_classifier  # type: ignore[assignment]
         self._ingestion_mod.embed_texts = self._original_embed_texts  # type: ignore[assignment]
+        app.dependency_overrides.pop(get_current_user, None)
 
     def test_bootstrap_and_atomic_transition(self) -> None:
         from app.services.diagnostic import lifecycle as dl_mod

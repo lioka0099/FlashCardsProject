@@ -16,11 +16,17 @@ const progress = {
 
 describe("CreatingTest", () => {
   it("renders header, file chip and all six steps", () => {
-    render(<CreatingTest fileName="ML.pdf" progress={progress} />);
+    render(<CreatingTest fileNames={["ML.pdf"]} progress={progress} />);
     expect(screen.getByText("Creating your test...")).toBeInTheDocument();
     expect(screen.getByText("ML.pdf")).toBeInTheDocument();
     expect(screen.getByText("Uploading document")).toBeInTheDocument();
     expect(screen.getByText("Building your study set")).toBeInTheDocument();
+  });
+
+  it("renders a chip for every uploaded file, not just the first", () => {
+    render(<CreatingTest fileNames={["Chapter_1.pdf", "Chapter_2.pdf"]} progress={progress} />);
+    expect(screen.getByText("Chapter_1.pdf")).toBeInTheDocument();
+    expect(screen.getByText("Chapter_2.pdf")).toBeInTheDocument();
   });
 
   it("marks done/active steps via data-status for styling", () => {

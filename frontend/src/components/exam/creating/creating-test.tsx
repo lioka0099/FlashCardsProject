@@ -21,7 +21,7 @@ function StepIcon({ status }: { status: ProgressStepStatus }) {
   return <span className="ct-step__dot" aria-hidden="true" />;
 }
 
-export function CreatingTest({ fileName, progress }: { fileName?: string; progress?: BootstrapProgress }) {
+export function CreatingTest({ fileNames, progress }: { fileNames?: string[]; progress?: BootstrapProgress }) {
   const steps = progress?.steps ?? [];
   const [tip, setTip] = useState(0);
 
@@ -36,12 +36,12 @@ export function CreatingTest({ fileName, progress }: { fileName?: string; progre
         <span className="ct__sparkle" aria-hidden="true"><Sparkles size={28} /></span>
         <h1 className="ct__title">Creating your test...</h1>
         <p className="ct__sub">Our AI is analyzing your document and building a personalized study set just for you.</p>
-        {fileName ? (
-          <span className="ct__file">
+        {fileNames?.map((name) => (
+          <span className="ct__file" key={name}>
             <FileText size={16} aria-hidden="true" />
-            <span className="ct__file-name">{fileName}</span>
+            <span className="ct__file-name">{name}</span>
           </span>
-        ) : null}
+        ))}
       </header>
 
       <section className="ct__card">

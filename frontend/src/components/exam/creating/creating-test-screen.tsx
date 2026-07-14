@@ -54,7 +54,7 @@ export function CreatingTestScreen({ examId }: { examId: string }) {
   return (
     <div className="ct-screen">
       <CreatingTest
-        fileName={filenames[0] ?? data?.title}
+        fileNames={filenames.length > 0 ? filenames : data?.title ? [data.title] : undefined}
         progress={info.progress as BootstrapProgress | undefined}
       />
     </div>

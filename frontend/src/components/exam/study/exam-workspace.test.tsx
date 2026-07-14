@@ -278,4 +278,56 @@ describe("ExamWorkspace", () => {
 
     await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/exams/exam-1/creating"));
   });
+
+  it("shows a source-files trigger with the file count and reveals filenames on click", async () => {
+    getExamByIdMock.mockResolvedValue({
+      exam_id: "exam-1",
+      user_id: "guest",
+      title: "Test Exam",
+      mode: "mastery",
+      state: "active_learning",
+      diagnostic_total: 0,
+      diagnostic_answered: 0,
+      diagnostic_started_at: null,
+      diagnostic_completed_at: null,
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+      info: { filenames: ["Chapter_1.pdf", "Chapter_2.pdf"] },
+    });
+    getSessionNextCardMock.mockResolvedValueOnce(nextCardResponse(buildCard("c1", "Question 1")));
+    logSessionEventMock.mockResolvedValue({ event_id: "evt-1" });
+
+    renderWorkspace();
+
+    const trigger = await screen.findByRole("button", { name: /2 files uploaded/i });
+    expect(screen.queryByText("Chapter_1.pdf")).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    expect(screen.getByText("Chapter_1.pdf")).toBeInTheDocument();
+    expect(screen.getByText("Chapter_2.pdf")).toBeInTheDocument();
+  });
+
+  it("does not render a source-files trigger when the exam has no filenames", async () => {
+    getExamByIdMock.mockResolvedValue({
+      exam_id: "exam-1",
+      user_id: "guest",
+      title: "Test Exam",
+      mode: "mastery",
+      state: "active_learning",
+      diagnostic_total: 0,
+      diagnostic_answered: 0,
+      diagnostic_started_at: null,
+      diagnostic_completed_at: null,
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+      info: {},
+    });
+    getSessionNextCardMock.mockResolvedValueOnce(nextCardResponse(buildCard("c1", "Question 1")));
+    logSessionEventMock.mockResolvedValue({ event_id: "evt-1" });
+
+    renderWorkspace();
+
+    await screen.findByText("Question 1");
+    expect(screen.queryByRole("button", { name: /files uploaded/i })).not.toBeInTheDocument();
+  });
 });

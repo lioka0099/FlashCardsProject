@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { Home } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronDown, FileText, Home } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   assertActiveRateableCard,
@@ -47,6 +47,8 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
   const [statusMessage, setStatusMessage] = useState<string | null | undefined>(undefined);
   const [selectedRatings, setSelectedRatings] = useState<Record<string, ReviewRating>>({});
   const [proofsCard, setProofsCard] = useState<Card | null>(null);
+  const [isSourcesOpen, setIsSourcesOpen] = useState(false);
+  const sourcesRef = useRef<HTMLDivElement | null>(null);
 
   const sessionQuery = useQuery({
     queryKey: ["session-next-card", examId, userId],
@@ -72,6 +74,20 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
       router.replace(`/exams/${examId}/creating`);
     }
   }, [examQuery.data?.state, examId, router]);
+
+  useEffect(() => {
+    if (!isSourcesOpen) {
+      return;
+    }
+    function onPointerDown(event: MouseEvent) {
+      if (sourcesRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      setIsSourcesOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [isSourcesOpen]);
 
   const initialCard = (sessionQuery.data?.card as Card | null) ?? null;
   const seededHistoryCards = historyCards.length > 0 ? historyCards : initialCard ? [initialCard] : [];
@@ -242,6 +258,9 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
   const cardCountRaw = (examQuery.data?.info as Record<string, unknown> | undefined)?.card_count;
   const cardCount = typeof cardCountRaw === "number" ? cardCountRaw : null;
 
+  const fileNamesRaw = (examQuery.data?.info as Record<string, unknown> | undefined)?.filenames;
+  const fileNames = Array.isArray(fileNamesRaw) ? (fileNamesRaw as string[]) : [];
+
   return (
     <motion.div
       className="study"
@@ -268,6 +287,45 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
           </h1>
           {cardCount !== null ? <p className="study__deck-sub">{cardCount} cards</p> : null}
         </div>
+        {fileNames.length > 0 ? (
+          <div className="study__sources" ref={sourcesRef}>
+            <button
+              type="button"
+              className="study__sources-trigger"
+              aria-haspopup="menu"
+              aria-expanded={isSourcesOpen}
+              onClick={() => setIsSourcesOpen((open) => !open)}
+            >
+              <FileText size={16} aria-hidden="true" />
+              <span>{fileNames.length} file{fileNames.length === 1 ? "" : "s"} uploaded</span>
+              <ChevronDown
+                size={16}
+                aria-hidden="true"
+                className={`study__sources-chevron${isSourcesOpen ? " study__sources-chevron--open" : ""}`}
+              />
+            </button>
+            <AnimatePresence>
+              {isSourcesOpen ? (
+                <motion.div
+                  className="study__sources-menu"
+                  role="menu"
+                  aria-label="Source files"
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                  transition={{ duration: 0.16, ease: "easeOut" }}
+                >
+                  {fileNames.map((name) => (
+                    <span className="study__sources-item" key={name}>
+                      <FileText size={16} aria-hidden="true" />
+                      <span>{name}</span>
+                    </span>
+                  ))}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+        ) : null}
       </header>
 
       <div className="study__body">

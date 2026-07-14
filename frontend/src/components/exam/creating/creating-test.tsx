@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Brain, Check, FileText, Lightbulb, ListChecks, Loader2, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Brain, Check, ChevronDown, FileText, Lightbulb, ListChecks, Loader2, Sparkles } from "lucide-react";
 import type { BootstrapProgress, ProgressStepStatus } from "@/lib/api/client";
 import "./creating-test.css";
 
@@ -24,24 +25,76 @@ function StepIcon({ status }: { status: ProgressStepStatus }) {
 export function CreatingTest({ fileNames, progress }: { fileNames?: string[]; progress?: BootstrapProgress }) {
   const steps = progress?.steps ?? [];
   const [tip, setTip] = useState(0);
+  const [isFilesOpen, setIsFilesOpen] = useState(false);
+  const filesRef = useRef<HTMLDivElement | null>(null);
+  const fileCount = fileNames?.length ?? 0;
 
   useEffect(() => {
     const id = window.setInterval(() => setTip((t) => (t + 1) % TIPS.length), 5000);
     return () => window.clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (!isFilesOpen) {
+      return;
+    }
+    function onPointerDown(event: MouseEvent) {
+      if (filesRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      setIsFilesOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [isFilesOpen]);
+
   return (
     <div className="ct">
       <header className="ct__head">
         <span className="ct__sparkle" aria-hidden="true"><Sparkles size={28} /></span>
         <h1 className="ct__title">Creating your test...</h1>
-        <p className="ct__sub">Our AI is analyzing your document and building a personalized study set just for you.</p>
-        {fileNames?.map((name) => (
-          <span className="ct__file" key={name}>
-            <FileText size={16} aria-hidden="true" />
-            <span className="ct__file-name">{name}</span>
-          </span>
-        ))}
+        <p className="ct__sub">
+          Our AI is analyzing your document{fileCount > 1 ? "s" : ""} and building a personalized study set just for you.
+        </p>
+        {fileCount > 0 ? (
+          <div className="ct__files" ref={filesRef}>
+            <button
+              type="button"
+              className="ct__files-trigger"
+              aria-haspopup="menu"
+              aria-expanded={isFilesOpen}
+              onClick={() => setIsFilesOpen((open) => !open)}
+            >
+              <FileText size={16} aria-hidden="true" />
+              <span>{fileCount} file{fileCount === 1 ? "" : "s"} uploaded</span>
+              <ChevronDown
+                size={16}
+                aria-hidden="true"
+                className={`ct__files-chevron${isFilesOpen ? " ct__files-chevron--open" : ""}`}
+              />
+            </button>
+            <AnimatePresence>
+              {isFilesOpen ? (
+                <motion.div
+                  className="ct__files-menu"
+                  role="menu"
+                  aria-label="Uploaded files"
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                  transition={{ duration: 0.16, ease: "easeOut" }}
+                >
+                  {fileNames?.map((name) => (
+                    <span className="ct__file" key={name}>
+                      <FileText size={16} aria-hidden="true" />
+                      <span className="ct__file-name">{name}</span>
+                    </span>
+                  ))}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+        ) : null}
       </header>
 
       <section className="ct__card">

@@ -16,18 +16,29 @@ import {
   Smile,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
 import { InlineError } from "@/components/common/inline-error";
+import { downloadSource } from "@/components/exam/lib/download-source";
 import { MathText } from "@/components/exam/math-text";
+import { TextSourceModal } from "@/components/exam/study/text-source-modal";
 import {
   getExamById,
   getPresentedHistory,
   type Card,
+  type ProofSpan,
   type ReviewRating,
 } from "@/lib/api/client";
 import { mapApiError } from "@/lib/api/ui-error";
 import { useGuestSession } from "@/lib/session/guest-session";
 import { getTopicColor } from "@/lib/topic-colors";
+import "@/components/exam/study/study.css";
 import "./history.css";
+
+// react-pdf touches browser-only globals at module load; load client-only.
+const PdfSourceModal = dynamic(
+  () => import("@/components/exam/study/pdf-source-modal").then((m) => m.PdfSourceModal),
+  { ssr: false },
+);
 
 type HistoryListProps = {
   examId: string;
@@ -74,6 +85,10 @@ export function HistoryList({ examId }: HistoryListProps) {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [isAnswerVisible, setIsAnswerVisible] = useState(false);
   const [activeProofIndex, setActiveProofIndex] = useState<number | null>(0);
+  const [openSourceModal, setOpenSourceModal] = useState<
+    { kind: "pdf" | "text"; proof: ProofSpan } | null
+  >(null);
+  const [downloadErrorKey, setDownloadErrorKey] = useState<string | null>(null);
 
   const [topicFilter, setTopicFilter] = useState("all");
   const [ratingFilter, setRatingFilter] = useState("all");
@@ -266,6 +281,7 @@ export function HistoryList({ examId }: HistoryListProps) {
               <p>Pick a card from the list to stroll through your past brilliance.</p>
             </div>
           ) : (
+            <>
             <div className={`hist-shell rc--${selectedRating ?? "none"}`}>
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
@@ -318,44 +334,67 @@ export function HistoryList({ examId }: HistoryListProps) {
                       <p className="hist-proofs__title"><Quote size={14} aria-hidden="true" /> Supporting evidence</p>
                       {selectedCard.proofs.length > 0 ? (
                         <div className="hist-proofs">
-                          {selectedCard.proofs.map((proof, proofIndex) => (
-                            <div className="hist-proof" key={`${proof.doc_id}-${proof.start}-${proof.end}-${proofIndex}`}>
-                              <button
-                                type="button"
-                                className="hist-proof__btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveProofIndex((prev) => (prev === proofIndex ? null : proofIndex));
-                                }}
-                              >
-                                Source {proofIndex + 1}
-                                <ChevronDown
-                                  size={16}
-                                  className={`hist-proof__chev${activeProofIndex === proofIndex ? " hist-proof__chev--open" : ""}`}
-                                  aria-hidden="true"
-                                />
-                              </button>
-                              <AnimatePresence initial={false}>
-                                {activeProofIndex === proofIndex ? (
-                                  <motion.div
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: "auto", opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }}
-                                    transition={{ duration: 0.2, ease: "easeInOut" }}
-                                    style={{ overflow: "hidden" }}
-                                  >
-                                    <div className="hist-proof__body">
-                                      <p className="hist-proof__src">
-                                        {proof.doc_id}
-                                        {proof.page !== null ? ` • Page ${proof.page}` : ""}
-                                      </p>
-                                      <p className="hist-proof__text">{proof.text}</p>
-                                    </div>
-                                  </motion.div>
-                                ) : null}
-                              </AnimatePresence>
-                            </div>
-                          ))}
+                          {selectedCard.proofs.map((proof, proofIndex) => {
+                            const pageLabel = proof.page !== null ? String(proof.page) : "Unavailable";
+                            const proofKey = `${proof.doc_id}:${proof.page ?? "na"}:${proof.start}:${proof.end}`;
+                            return (
+                              <div className="hist-proof" key={proofKey}>
+                                <button
+                                  type="button"
+                                  className="hist-proof__btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveProofIndex((prev) => (prev === proofIndex ? null : proofIndex));
+                                  }}
+                                >
+                                  Source {proofIndex + 1}
+                                  <ChevronDown
+                                    size={16}
+                                    className={`hist-proof__chev${activeProofIndex === proofIndex ? " hist-proof__chev--open" : ""}`}
+                                    aria-hidden="true"
+                                  />
+                                </button>
+                                <AnimatePresence initial={false}>
+                                  {activeProofIndex === proofIndex ? (
+                                    <motion.div
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: "auto", opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      transition={{ duration: 0.2, ease: "easeInOut" }}
+                                      style={{ overflow: "hidden" }}
+                                    >
+                                      <div className="hist-proof__body">
+                                        <p className="hist-proof__text">{proof.text}</p>
+                                        <p className="evidence__meta">Page: {pageLabel}</p>
+                                        <button
+                                          className="evidence__jump"
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (proof.is_pdf !== false) {
+                                              setOpenSourceModal({ kind: "pdf", proof });
+                                            } else if (proof.is_txt) {
+                                              setOpenSourceModal({ kind: "text", proof });
+                                            } else {
+                                              setDownloadErrorKey(null);
+                                              downloadSource(proof, selectedCard, userId).catch(() =>
+                                                setDownloadErrorKey(proofKey),
+                                              );
+                                            }
+                                          }}
+                                        >
+                                          Open the source
+                                        </button>
+                                        {downloadErrorKey === proofKey ? (
+                                          <p className="evidence__download-error">Could not download the source.</p>
+                                        ) : null}
+                                      </div>
+                                    </motion.div>
+                                  ) : null}
+                                </AnimatePresence>
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         <p className="hist-note">No evidence attached to this card.</p>
@@ -376,6 +415,23 @@ export function HistoryList({ examId }: HistoryListProps) {
                 </motion.div>
               </AnimatePresence>
             </div>
+            {openSourceModal?.kind === "pdf" ? (
+              <PdfSourceModal
+                proof={openSourceModal.proof}
+                card={selectedCard}
+                userId={userId}
+                onClose={() => setOpenSourceModal(null)}
+              />
+            ) : null}
+            {openSourceModal?.kind === "text" ? (
+              <TextSourceModal
+                proof={openSourceModal.proof}
+                card={selectedCard}
+                userId={userId}
+                onClose={() => setOpenSourceModal(null)}
+              />
+            ) : null}
+            </>
           )}
         </main>
       </div>

@@ -169,8 +169,7 @@
 .hist-proof__btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .6rem .8rem; background: none; border: 0; cursor: pointer; text-align: left; font-weight: 600; font-size: .86rem; color: var(--n700); }
 .hist-proof__chev { color: var(--n500); transition: transform .18s ease; flex-shrink: 0; }
 .hist-proof__chev--open { transform: rotate(180deg); }
-.hist-proof__body { padding: 0 .8rem .7rem; }
-.hist-proof__src { font-size: .74rem; color: var(--n500); font-weight: 600; margin: 0 0 .35rem; }
+.hist-proof__body { padding: 0 .8rem .7rem; display: flex; flex-direction: column; gap: .5rem; align-items: flex-start; }
 .hist-proof__text { font-size: .86rem; color: var(--n700); white-space: pre-wrap; margin: 0; }
 
 @media (prefers-reduced-motion: reduce) {

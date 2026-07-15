@@ -5,8 +5,7 @@ import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { Card, ProofSpan } from "@/lib/api/client";
 import dynamic from "next/dynamic";
-import { buildSourceUrl } from "@/components/exam/lib/pdf-source-url";
-import { fetchSourceBlob } from "@/components/exam/lib/fetch-source-blob";
+import { downloadSource } from "@/components/exam/lib/download-source";
 import { MathText } from "@/components/exam/math-text";
 import { TextSourceModal } from "@/components/exam/study/text-source-modal";
 
@@ -16,26 +15,6 @@ const PdfSourceModal = dynamic(
   () => import("@/components/exam/study/pdf-source-modal").then((m) => m.PdfSourceModal),
   { ssr: false },
 );
-
-function downloadFilename(docId: string): string {
-  const base = docId.split("/").pop() || "document";
-  return base.toLowerCase().endsWith(".docx") ? base : `${base}.docx`;
-}
-
-async function downloadSource(proof: ProofSpan, card: Card, userId: string): Promise<void> {
-  const blob = await fetchSourceBlob(buildSourceUrl(proof, card, userId));
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = downloadFilename(proof.doc_id);
-  try {
-    document.body.appendChild(link);
-    link.click();
-  } finally {
-    link.remove();
-    URL.revokeObjectURL(url);
-  }
-}
 
 type ProofsDialogProps = {
   isOpen: boolean;

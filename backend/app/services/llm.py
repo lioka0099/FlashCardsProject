@@ -4,6 +4,7 @@ from typing import Any, Callable, List, TypeVar
 import json
 import logging
 import random
+import re
 import time
 import threading
 import numpy as np
@@ -125,10 +126,41 @@ def embed_query(text: str) -> np.ndarray:
     return embed_texts([text])
 
 
+_JSON_VALID_ESCAPES = set('"\\/bfnrtu')
+_BACKSLASH_TOKEN = re.compile(r'\\(.)', re.DOTALL)
+
+
+def _escape_stray_backslashes(raw: str) -> str:
+    """
+    Double any backslash that isn't already part of a valid JSON escape pair.
+
+    Prompts that ask an LLM for JSON containing LaTeX (e.g. \\( ... \\), \\begin{..})
+    require the model to double every backslash so the JSON stays valid. Models
+    occasionally forget for one command, which breaks parsing for the whole
+    response. This repairs that specific slip without touching backslash pairs
+    that are already correctly escaped (including the ones LaTeX itself uses,
+    e.g. the matrix row separator \\\\).
+    """
+    def repair(match: "re.Match[str]") -> str:
+        ch = match.group(1)
+        return match.group(0) if ch in _JSON_VALID_ESCAPES else "\\\\" + ch
+
+    return _BACKSLASH_TOKEN.sub(repair, raw)
+
+
 def safe_json_load(raw: str) -> dict:
-    """Parse an LLM JSON response, returning {} on failure or non-object result."""
-    try:
-        data = json.loads(raw)
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
+    """
+    Parse an LLM JSON response, returning {} on failure or non-object result.
+
+    Tries a strict parse first, then relaxes in two ways an LLM's near-JSON can
+    fail: literal control characters inside strings (strict=False), and a stray
+    unescaped backslash from embedded LaTeX (_escape_stray_backslashes).
+    """
+    for candidate in (raw, _escape_stray_backslashes(raw)):
+        for strict in (True, False):
+            try:
+                data = json.loads(candidate, strict=strict)
+            except Exception:
+                continue
+            return data if isinstance(data, dict) else {}
+    return {}

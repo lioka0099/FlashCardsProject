@@ -5,7 +5,7 @@ from typing import List, Sequence, Optional
 import json
 import re
 import numpy as np
-from app.services.llm import CHAT_MODEL, CHAT_MODEL_FAST, chat_completions_create, embed_texts
+from app.services.llm import CHAT_MODEL, CHAT_MODEL_FAST, chat_completions_create, embed_texts, safe_json_load
 from app.services.math.formatting import MATH_DISPLAY_INSTRUCTION
 from app.services.corpus.retrieval import retrieve_with_proofs
 from app.data.vector_store import VectorStore
@@ -430,11 +430,10 @@ def generate_answer(
         response_format={"type": "json_object"},
     )
     raw = resp.choices[0].message.content or ""
-    try:
-        payload = json.loads(raw)
-    except Exception:
-        payload = {"answer": raw}
-    answer_text = str(payload.get("answer", "")).strip() or raw.strip()
+    payload = safe_json_load(raw)
+    answer_text = str(payload.get("answer", "")).strip()
+    if not answer_text:
+        raise ValueError("Answer generation returned no answer.")
     raw_score = payload.get("score")
     try:
         score_val = float(raw_score) if raw_score is not None else None

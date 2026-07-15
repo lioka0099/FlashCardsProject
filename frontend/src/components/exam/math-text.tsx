@@ -14,6 +14,27 @@ const DELIMITERS = [
   { left: "$", right: "$", display: false },
 ];
 
+// The card LLM occasionally double-escapes a delimiter (\\( instead of \()
+// when authoring JSON, since JSON itself requires backslashes doubled — most
+// of the time it un-escapes correctly, but the rare miss leaves KaTeX unable
+// to recognize the delimiter. Collapse that one extra backslash back down.
+const OVER_ESCAPED_DELIMITER = /\\\\(?=[()[\]])/g;
+
+// Rarer still: the LLM drops the \( \) delimiters around a clause entirely,
+// leaving a bare command like \\mathbb{R}^n sitting in plain prose with
+// nothing for KaTeX to key off. Only kick in when the text has no delimiters
+// anywhere (so a normal, already-working card is never touched), and wrap
+// each bare command run in delimiters, normalizing 1+ leading backslashes to
+// one. ponytail: single-command heuristic, not a LaTeX parser — won't catch a
+// bare command mixed into an otherwise-delimited card; widen if that shows up.
+const HAS_DELIMITER = /\\\(|\\\[|\$/;
+const BARE_LATEX_COMMAND = /\\+([a-zA-Z]+(?:\{[^{}]*\})*(?:[\^_](?:\{[^{}]*\}|[a-zA-Z0-9]+))*)/g;
+
+function wrapBareLatexCommands(text: string): string {
+  if (HAS_DELIMITER.test(text)) return text;
+  return text.replace(BARE_LATEX_COMMAND, (_match, body: string) => `\\(\\${body}\\)`);
+}
+
 type MathTextProps = {
   text: string;
   className?: string;
@@ -26,7 +47,8 @@ export function MathText({ text, className }: MathTextProps) {
 
   useEffect(() => {
     if (!ref.current) return;
-    ref.current.textContent = text;
+    const normalized = wrapBareLatexCommands(text.replace(OVER_ESCAPED_DELIMITER, "\\"));
+    ref.current.textContent = normalized;
     renderMathInElement(ref.current, {
       delimiters: DELIMITERS,
       throwOnError: false,

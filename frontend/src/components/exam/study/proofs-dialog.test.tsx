@@ -251,6 +251,26 @@ describe("ProofsDialog", () => {
     delete (URL as { revokeObjectURL?: unknown }).revokeObjectURL;
   });
 
+  it("renders LaTeX in the question instead of raw delimiters", async () => {
+    render(
+      <ProofsDialog
+        isOpen
+        card={buildCard({
+          question:
+            "Consider \\( T: \\mathbb{R}^2 \\to \\mathbb{R}^2 \\) defined by \\( T(x) = Ax \\).",
+        })}
+        userId="guest"
+        onClose={() => {}}
+      />,
+    );
+
+    const question = await screen.findByText((_, element) =>
+      element?.classList.contains("evidence__question") ?? false,
+    );
+    await waitFor(() => expect(question.querySelector(".katex")).not.toBeNull());
+    expect(question.textContent).not.toContain("\\(");
+  });
+
   it("shows an inline error when the DOCX download fails", async () => {
     fetchSourceBlobMock.mockRejectedValue(new Error("Failed to fetch source document (401)"));
 

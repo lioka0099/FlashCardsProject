@@ -10,7 +10,7 @@ import numpy as np
 
 from app.api.schemas import ProofSpan
 from app.data.vector_store import VectorStore
-from app.services.llm import CHAT_MODEL, chat_completions_create
+from app.services.llm import CHAT_MODEL, chat_completions_create, safe_json_load
 from app.services.corpus.qa import _build_context, _condense_proofs, _select_display_proofs
 from app.services.corpus.retrieval import retrieve_with_proofs
 
@@ -20,14 +20,6 @@ class MathTeacherModelResult:
     answer: str
     proofs: List[ProofSpan]
     payload: Dict[str, Any]
-
-
-def _safe_json_load(raw: str) -> Dict[str, Any]:
-    try:
-        data = json.loads(raw)
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {"answer": raw}
 
 
 def _format_step_plan(question_payload: Dict[str, Any]) -> str:
@@ -139,10 +131,10 @@ class MathTeacherModelService:
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.1,
-            max_tokens=800,
+            max_tokens=1600,
             response_format={"type": "json_object"},
         )
-        payload = _safe_json_load(resp.choices[0].message.content or "{}")
+        payload = safe_json_load(resp.choices[0].message.content or "{}")
         answer = str(payload.get("answer") or "").strip()
         if not answer:
             final = str(payload.get("final_answer") or "").strip()

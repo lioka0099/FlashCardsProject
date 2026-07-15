@@ -7,6 +7,7 @@ import type { Card, ProofSpan } from "@/lib/api/client";
 import dynamic from "next/dynamic";
 import { buildSourceUrl } from "@/components/exam/lib/pdf-source-url";
 import { fetchSourceBlob } from "@/components/exam/lib/fetch-source-blob";
+import { MathText } from "@/components/exam/math-text";
 import { TextSourceModal } from "@/components/exam/study/text-source-modal";
 
 // react-pdf (pdf.js) touches browser-only globals (DOMMatrix) at module load,
@@ -118,7 +119,7 @@ export function ProofsDialog({
         <header className="evidence__header">
           <div>
             <h2 className="evidence__title">Supporting evidence</h2>
-            <p className="evidence__question">{card.question}</p>
+            <MathText className="evidence__question math-text" text={card.question} />
           </div>
           <button
             className="evidence__close"

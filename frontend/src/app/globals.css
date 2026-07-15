@@ -19,48 +19,9 @@
     sans-serif;
 
   --background: #fff7ed;
-  --surface: #fffdf8;
-  --surface-elevated: #ffffff;
   --foreground: #172554;
-  --foreground-muted: #5b6478;
   --accent: #2563eb;
-  --accent-strong: #7c3aed;
-  --accent-contrast: #ffffff;
-  --border: #dbe5ff;
-  --highlight: #ffd84d;
-  --mint: #65e4b2;
   --danger: #e11d48;
-  --coral: #ff6b6b;
-  --violet: #8b5cf6;
-  --sky: #38bdf8;
-  --shadow-soft: 0 24px 70px rgba(37, 99, 235, 0.16);
-
-  --radius-sm: 0.5rem;
-  --radius-md: 0.875rem;
-  --radius-lg: 1.25rem;
-
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --space-10: 2.5rem;
-  --space-12: 3rem;
-}
-
-[data-theme="dark"] {
-  --background: #fff7ed;
-  --surface: #fffdf8;
-  --surface-elevated: #ffffff;
-  --foreground: #172554;
-  --foreground-muted: #5b6478;
-  --accent: #2563eb;
-  --accent-strong: #7c3aed;
-  --accent-contrast: #ffffff;
-  --border: #dbe5ff;
-  --danger: #e11d48;
-  --shadow-soft: 0 24px 70px rgba(37, 99, 235, 0.16);
 }
 
 *,
@@ -85,8 +46,7 @@ body {
 
 h1,
 h2,
-h3,
-.app-shell__brand {
+h3 {
   font-family: var(--font-display);
 }
 
@@ -101,45 +61,11 @@ a {
 
 .app-shell {
   min-height: 100vh;
-  background:
-    radial-gradient(
-      circle at 8% 78%,
-      color-mix(in srgb, var(--highlight) 30%, transparent) 0%,
-      transparent 26%
-    ),
-    radial-gradient(
-      circle at 92% 12%,
-      color-mix(in srgb, var(--mint) 48%, transparent) 0%,
-      transparent 22%
-    ),
-    var(--background);
-}
-
-.app-shell__header {
-  display: flex;
-  align-items: center;
-  height: 3.75rem;
-  padding: 0 var(--space-6);
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 90%, #f3f6fb);
-}
-
-.app-shell__brand {
-  font-size: 1.0625rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--foreground);
-}
-
-.app-shell__brand-link {
-  text-decoration: none;
 }
 
 .app-shell__main {
   width: 100%;
 }
-
-.app-shell__logout { margin-left: auto; background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 
 .inline-error__message {
   margin: 0;
@@ -178,96 +104,8 @@ a {
   }
 }
 
-.placeholder-page {
-  width: min(740px, 100% - 2 * var(--space-6));
-  margin: var(--space-10) auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  padding: var(--space-8);
-}
-
-/* Bright 2026 refresh: layered here so existing component contracts stay stable. */
-body {
-  background:
-    radial-gradient(circle at 10% 8%, rgba(255, 216, 77, 0.42), transparent 24rem),
-    radial-gradient(circle at 90% 2%, rgba(56, 189, 248, 0.32), transparent 25rem),
-    linear-gradient(135deg, #fff7ed 0%, #f8fbff 48%, #fff1f2 100%);
-}
-
 button,
 input,
 a {
   -webkit-tap-highlight-color: transparent;
-}
-
-.app-shell {
-  background:
-    radial-gradient(circle at 7% 74%, rgba(101, 228, 178, 0.28), transparent 24rem),
-    radial-gradient(circle at 82% 18%, rgba(139, 92, 246, 0.22), transparent 27rem),
-    radial-gradient(circle at 52% 6%, rgba(255, 107, 107, 0.18), transparent 18rem),
-    transparent;
-}
-
-.app-shell__header {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  height: 4rem;
-  border-bottom: 1px solid rgba(219, 229, 255, 0.76);
-  background: rgba(255, 255, 255, 0.74);
-  backdrop-filter: blur(22px);
-  box-shadow: 0 14px 42px rgba(37, 99, 235, 0.08);
-}
-
-.app-shell__brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.7rem;
-  color: #172554;
-  font-size: 1.02rem;
-  letter-spacing: -0.02em;
-}
-
-.app-shell__brand::before {
-  content: "";
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.85rem;
-  background:
-    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.96), transparent 34%),
-    linear-gradient(135deg, var(--highlight), var(--coral) 48%, var(--violet));
-  box-shadow: 0 10px 24px rgba(139, 92, 246, 0.25);
-}
-
-.placeholder-page {
-  border-color: rgba(219, 229, 255, 0.92);
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 18px 50px rgba(37, 99, 235, 0.11);
-  backdrop-filter: blur(18px);
-}
-
-.placeholder-page h1 {
-  color: #172554;
-  letter-spacing: -0.04em;
-}
-
-.placeholder-page {
-  position: relative;
-  overflow: hidden;
-  border-radius: 2rem;
-}
-
-.placeholder-page::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 86% 14%, rgba(255, 216, 77, 0.28), transparent 14rem),
-    radial-gradient(circle at 14% 90%, rgba(56, 189, 248, 0.2), transparent 14rem);
-}
-
-.placeholder-page > * {
-  position: relative;
 }

@@ -34,6 +34,18 @@ class LoginRequest(BaseModel):
     password: str = Field(..., description="Plaintext password")
 
 
+class UpdateProfileRequest(BaseModel):
+    """Request to update account name and/or email."""
+    name: Optional[str] = Field(default=None, description="Display name")
+    email: Optional[str] = Field(default=None, description="User email (unique)")
+
+
+class ChangePasswordRequest(BaseModel):
+    """Request to change the account password."""
+    current_password: str = Field(..., description="Current plaintext password")
+    new_password: str = Field(..., min_length=6, description="New plaintext password (hashed server-side)")
+
+
 class ExamResponse(BaseModel):
     """Response for exam data."""
     exam_id: str

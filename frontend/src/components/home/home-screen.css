@@ -340,17 +340,35 @@
 }
 
 .dash-account__link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   padding: 0.55rem 0.7rem;
+  border: 0;
   border-radius: 9px;
+  background: none;
   text-decoration: none;
   color: var(--n700);
+  font: inherit;
   font-size: 0.9rem;
   font-weight: 600;
+  cursor: pointer;
+  text-align: left;
 }
 
 .dash-account__link:hover {
   background: var(--p-soft);
   color: var(--p-strong);
+}
+
+.dash-account__divider {
+  margin: 0.3rem 0.2rem;
+  border-top: 1px solid var(--line);
+}
+
+.dash-account__link--danger:hover {
+  background: var(--err-soft);
+  color: var(--err);
 }
 
 .dash-content {

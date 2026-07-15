@@ -61,3 +61,60 @@ def test_login_rate_limited_after_10_per_minute():
         client.post("/auth/login", json={"email": email, "password": "wrong"})
     limited = client.post("/auth/login", json={"email": email, "password": "wrong"})
     assert limited.status_code == 429
+
+
+def _register_and_token():
+    init_db()
+    email = _email()
+    r = client.post("/auth/register", json={"email": email, "password": "pw123456", "name": "Ada"})
+    return r.json()["token"], email
+
+
+def test_update_profile_changes_name_and_email():
+    token, _ = _register_and_token()
+    new_email = _email()
+    r = client.patch(
+        "/auth/me",
+        json={"name": "Grace", "email": new_email},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json() == {"user_id": r.json()["user_id"], "email": new_email, "name": "Grace"}
+
+
+def test_update_profile_rejects_email_already_taken():
+    token, _ = _register_and_token()
+    _, other_email = _register_and_token()
+    r = client.patch(
+        "/auth/me",
+        json={"email": other_email},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 409
+
+
+def test_update_profile_without_token_401():
+    assert client.patch("/auth/me", json={"name": "X"}).status_code == 401
+
+
+def test_change_password_then_login_with_new_password():
+    token, email = _register_and_token()
+    app.state.limiter.reset()  # isolate from other tests' calls to /auth/login
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "pw123456", "new_password": "newpass123"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    login = client.post("/auth/login", json={"email": email, "password": "newpass123"})
+    assert login.status_code == 200
+
+
+def test_change_password_wrong_current_password_401():
+    token, _ = _register_and_token()
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "wrong", "new_password": "newpass123"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 401

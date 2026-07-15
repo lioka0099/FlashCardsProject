@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { getMe, logout } from "@/lib/api/auth";
+import { getMe } from "@/lib/api/auth";
 import "./profile.css";
 
 export default function ProfilePage() {
@@ -34,10 +34,6 @@ export default function ProfilePage() {
             <div className="profile__row"><dt>Email</dt><dd>{data.email ?? "—"}</dd></div>
           </dl>
         )}
-
-        <button className="profile__logout" type="button" onClick={logout}>
-          Log out
-        </button>
       </div>
     </section>
   );

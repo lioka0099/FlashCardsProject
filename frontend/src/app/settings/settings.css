@@ -1,0 +1,172 @@
+/* Settings page. Scoped palette mirrors the home dashboard (.dash) so it matches
+   the current design system instead of the global blue tokens. */
+
+.settings {
+  --p: #6f42c1;
+  --p-strong: #5b34a8;
+  --p-soft: #ede7f8;
+  --n900: #0f172a;
+  --n700: #334155;
+  --n500: #64748b;
+  --card: #ffffff;
+  --line: #ececf3;
+  --err: #ef4444;
+  --err-soft: #fdeaea;
+  --success: #22c55e;
+  --grad-p: linear-gradient(135deg, #6f42c1, #a78bfa);
+  --shadow-card: 0 18px 50px rgba(15, 23, 42, 0.07);
+
+  min-height: 100vh;
+  background: #f7f7fb;
+  padding: 1.5rem 1.5rem 3rem;
+}
+
+.settings__bar {
+  width: min(100%, 34rem);
+  margin: 0 auto 1.25rem;
+}
+
+.settings__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--p);
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.settings__back:hover {
+  background: color-mix(in srgb, var(--p) 8%, #fff);
+  border-color: color-mix(in srgb, var(--p) 35%, var(--line));
+}
+
+.settings__stack {
+  width: min(100%, 34rem);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.settings__card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.settings__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--n900);
+}
+
+.settings__subtitle {
+  margin: -0.6rem 0 0;
+  font-size: 0.9rem;
+  color: var(--n500);
+}
+
+.settings__muted {
+  margin: 0;
+  color: var(--n500);
+}
+
+.settings__form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.settings__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.settings__field span {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--n700);
+}
+
+.settings__field input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--n900);
+  background: #fff;
+}
+
+.settings__field input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--p) 45%, var(--line));
+  box-shadow: 0 0 0 3px var(--p-soft);
+}
+
+.settings__error {
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+  border-radius: 12px;
+  background: var(--err-soft);
+  color: var(--err);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.settings__success {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--success);
+}
+
+.settings__submit {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  cursor: pointer;
+  padding: 0.85rem 1.4rem;
+  border-radius: 12px;
+  background: var(--grad-p);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  box-shadow: 0 14px 36px rgba(111, 66, 193, 0.18);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.settings__submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: saturate(1.05);
+}
+
+.settings__submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings__submit {
+    transition: none;
+  }
+}

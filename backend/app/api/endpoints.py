@@ -29,6 +29,7 @@ from app.api.schemas import (
     CardResponse,
     ExamListResponse,
     ExamResponse,
+    ChangePasswordRequest,
     GenerateSingleCardRequest,
     GenerateSingleCardResponse,
     LoginRequest,
@@ -36,6 +37,7 @@ from app.api.schemas import (
     ProofSpan,
     RegisterRequest,
     ReviewCardRequest,
+    UpdateProfileRequest,
     SessionEventRequest,
     SessionEventResponse,
     TopicListResponse,
@@ -146,6 +148,32 @@ def me_endpoint(user_id: str = Depends(auth.get_current_user)):
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         return {"user_id": user.user_id, "email": user.email, "name": user.name}
+
+
+@app.patch("/auth/me")
+def update_profile_endpoint(req: UpdateProfileRequest, user_id: str = Depends(auth.get_current_user)):
+    with get_db() as db:
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if req.email is not None and req.email != user.email:
+            if db.query(User).filter(User.email == req.email, User.user_id != user_id).first():
+                raise HTTPException(status_code=409, detail="Email already registered")
+            user.email = req.email
+        if req.name is not None:
+            user.name = req.name
+        db.flush()
+        return {"user_id": user.user_id, "email": user.email, "name": user.name}
+
+
+@app.post("/auth/change-password")
+def change_password_endpoint(req: ChangePasswordRequest, user_id: str = Depends(auth.get_current_user)):
+    with get_db() as db:
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if not user or not user.password_hash or not auth.verify_password(req.current_password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+        user.password_hash = auth.hash_password(req.new_password)
+    return {"ok": True}
 
 
 def _immutable_exam_error_payload(*, exam_id: Optional[str] = None, message: str) -> Dict[str, Any]:

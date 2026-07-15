@@ -27,6 +27,17 @@ export async function getMe(): Promise<Me> {
   return apiRequest<Me>(apiEndpoints.authMe);
 }
 
+export async function updateMe(fields: { name?: string; email?: string }): Promise<Me> {
+  return apiRequest<Me>(apiEndpoints.authMe, { method: "PATCH", body: fields });
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await apiRequest<{ ok: boolean }>(apiEndpoints.authChangePassword, {
+    method: "POST",
+    body: { current_password: currentPassword, new_password: newPassword },
+  });
+}
+
 export function logout(): void {
   clearToken();
   if (typeof window !== "undefined") window.location.href = "/login";

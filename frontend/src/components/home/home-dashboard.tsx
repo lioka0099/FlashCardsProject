@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, User } from "lucide-react";
+import { ChevronDown, LogOut, User } from "lucide-react";
 import { ExamHistorySidebar } from "@/components/home/exam-history-sidebar";
 import { UploadExamForm } from "@/components/home/upload-exam-form";
+import { logout } from "@/lib/api/auth";
 import "@/components/home/home-screen.css";
 
 const DECK_NAME_INPUT_ID = "dash-deck-name";
@@ -93,6 +94,16 @@ export function HomeDashboard() {
                   <Link className="dash-account__link" href="/settings" role="menuitem">
                     Settings
                   </Link>
+                  <div className="dash-account__divider" role="separator" />
+                  <button
+                    className="dash-account__link dash-account__link--danger"
+                    type="button"
+                    role="menuitem"
+                    onClick={logout}
+                  >
+                    <LogOut size={15} />
+                    Log out
+                  </button>
                 </motion.div>
               ) : null}
             </AnimatePresence>

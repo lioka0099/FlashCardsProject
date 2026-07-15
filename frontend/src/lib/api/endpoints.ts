@@ -4,6 +4,7 @@ export const apiEndpoints = {
   authRegister: "/auth/register",
   authLogin: "/auth/login",
   authMe: "/auth/me",
+  authChangePassword: "/auth/change-password",
   exams: "/exams",
   examById: (examId: string) => `/exams/${examId}`,
   examFromUpload: "/exams/from-upload",

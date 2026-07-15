@@ -50,3 +50,14 @@ def test_login_wrong_password_401():
 
 def test_me_without_token_401():
     assert client.get("/auth/me").status_code == 401
+
+
+def test_login_rate_limited_after_10_per_minute():
+    init_db()
+    app.state.limiter.reset()  # isolate from other tests' calls to /auth/login
+    email = _email()
+    client.post("/auth/register", json={"email": email, "password": "pw123456"})
+    for _ in range(10):
+        client.post("/auth/login", json={"email": email, "password": "wrong"})
+    limited = client.post("/auth/login", json={"email": email, "password": "wrong"})
+    assert limited.status_code == 429

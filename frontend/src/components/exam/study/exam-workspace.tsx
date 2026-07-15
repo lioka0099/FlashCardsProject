@@ -103,7 +103,9 @@ export function ExamWorkspace({ examId }: ExamWorkspaceProps) {
   const currentMessage = statusMessage ?? sessionQuery.data?.message ?? null;
 
   useEffect(() => {
-    void logSessionEvent(examId, userId, "session_start", { source: "exam_workspace" });
+    void logSessionEvent(examId, userId, "session_start", { source: "exam_workspace" }).catch(
+      (error) => console.warn("session_start log failed", error),
+    );
   }, [examId, userId]);
 
   useEffect(() => {

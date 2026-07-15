@@ -37,3 +37,16 @@ def test_token_rejects_expired(monkeypatch):
     original_time = time.time
     monkeypatch.setattr(time, "time", lambda: original_time() + auth._TOKEN_TTL_SECONDS + 10)
     assert auth.verify_token(token) is None
+
+
+def test_refuses_non_development_without_jwt_secret():
+    with pytest.raises(RuntimeError):
+        auth._require_explicit_secret("production", None)
+
+
+def test_allows_development_without_jwt_secret():
+    auth._require_explicit_secret("development", None)
+
+
+def test_allows_non_development_with_jwt_secret():
+    auth._require_explicit_secret("production", "a-real-secret")

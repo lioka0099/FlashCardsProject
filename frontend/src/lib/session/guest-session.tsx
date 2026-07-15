@@ -11,7 +11,11 @@ const SessionContext = createContext<Session>({ userId: "" });
 export function GuestSessionProvider({ children }: PropsWithChildren) {
   const router = useRouter();
   const pathname = usePathname();
+  // Primitive state (not a single session object) so React's same-value bail-out
+  // stops the effect from re-rendering forever if it ever re-fires with an
+  // unchanged result (e.g. router's reference isn't stable across renders).
   const [userId, setUserId] = useState<string>("");
+  const [isResolved, setIsResolved] = useState(false);
 
   useEffect(() => {
     const token = getToken();
@@ -21,8 +25,17 @@ export function GuestSessionProvider({ children }: PropsWithChildren) {
       return;
     }
     setUserId(uid);
+    setIsResolved(true);
   }, [pathname, router]);
 
+  // The login page doesn't need a resolved session and is the redirect target
+  // above, so it must render even while session resolution is still pending.
+  if (pathname === "/login") {
+    return <SessionContext.Provider value={{ userId: "" }}>{children}</SessionContext.Provider>;
+  }
+  if (!isResolved) {
+    return null;
+  }
   return <SessionContext.Provider value={{ userId }}>{children}</SessionContext.Provider>;
 }
 

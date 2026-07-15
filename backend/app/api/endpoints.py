@@ -12,6 +12,10 @@ except Exception as exc:
         "FastAPI is required but not installed. Install it with 'pip install fastapi uvicorn'."
     ) from exc
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
 from datetime import datetime, timezone
 from pathlib import Path
 import shutil
@@ -101,9 +105,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 @app.post("/auth/register")
-def register_endpoint(req: RegisterRequest):
+@limiter.limit("10/minute")
+def register_endpoint(req: RegisterRequest, request: Request):
     with get_db() as db:
         if db.query(User).filter(User.email == req.email).first():
             raise HTTPException(status_code=409, detail="Email already registered")
@@ -120,7 +129,8 @@ def register_endpoint(req: RegisterRequest):
 
 
 @app.post("/auth/login")
-def login_endpoint(req: LoginRequest):
+@limiter.limit("10/minute")
+def login_endpoint(req: LoginRequest, request: Request):
     with get_db() as db:
         user = db.query(User).filter(User.email == req.email).first()
         if not user or not user.password_hash or not auth.verify_password(req.password, user.password_hash):

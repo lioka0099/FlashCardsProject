@@ -14,9 +14,21 @@ from typing import Optional
 from fastapi import Header, HTTPException
 
 _PBKDF2_ITERATIONS = 600_000
-_TOKEN_TTL_SECONDS = 30 * 24 * 3600  # 30 days
-# ponytail: dev default so local runs work with no setup; MUST set JWT_SECRET in prod.
+_TOKEN_TTL_SECONDS = 14 * 24 * 3600  # 14 days
+# Dev default so local runs work with no setup. Only usable when ENVIRONMENT=development
+# (the default) -- any other ENVIRONMENT value requires a real JWT_SECRET, see below.
 _DEV_SECRET = "dev-insecure-secret-change-me"
+
+
+def _require_explicit_secret(environment: str, secret: Optional[str]) -> None:
+    if environment.lower() != "development" and not secret:
+        raise RuntimeError(
+            "JWT_SECRET must be set when ENVIRONMENT is not 'development'. Refusing to "
+            "start with the insecure default signing key outside local dev."
+        )
+
+
+_require_explicit_secret(os.getenv("ENVIRONMENT", "development"), os.getenv("JWT_SECRET"))
 
 
 def _secret() -> bytes:

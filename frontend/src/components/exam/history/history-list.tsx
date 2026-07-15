@@ -306,6 +306,7 @@ export function HistoryList({ examId }: HistoryListProps) {
                     <div className="hist-face__meta">
                       <span className="hist-pill"><Brain size={16} aria-hidden="true" /> {pillLabel}</span>
                       {selectedRatingUi ? <span className="hist-pill hist-pill--rate">{selectedRatingUi.label}</span> : null}
+                      <span className="hist-pill">Difficulty {selectedCard.difficulty}</span>
                     </div>
                     {selectedCard.topic_label ? <p className="hist-face__topic">{selectedCard.topic_label}</p> : null}
                     <div className="hist-face__q">
@@ -328,6 +329,7 @@ export function HistoryList({ examId }: HistoryListProps) {
                     <div className="hist-face__meta">
                       <span className="hist-pill"><Brain size={16} aria-hidden="true" /> Answer</span>
                       {selectedRatingUi ? <span className="hist-pill hist-pill--rate">{selectedRatingUi.label}</span> : null}
+                      <span className="hist-pill">Difficulty {selectedCard.difficulty}</span>
                     </div>
                     <div className="hist-face__a">
                       <MathText className="math-text" text={selectedCard.answer} />

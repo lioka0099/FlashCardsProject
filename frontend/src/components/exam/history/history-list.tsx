@@ -249,7 +249,7 @@ export function HistoryList({ examId }: HistoryListProps) {
                           <span className="hist-item__topic">{card.topic_label ?? "General topic"}</span>
                           <span className="hist-item__time" title={time.full}>{time.short}</span>
                         </span>
-                        <span className="hist-item__q">{card.question}</span>
+                        <MathText className="hist-item__q" text={card.question} />
                       </span>
                     </button>
                   </li>

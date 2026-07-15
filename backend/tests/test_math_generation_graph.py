@@ -1,6 +1,6 @@
 import unittest
 
-from app.data.db_repository import StoredExam, StoredTopic
+from app.data.db_repository import StoredExam, StoredTopic, StoredTopicProficiency
 from app.services.generation import graph as graph_mod
 
 
@@ -191,16 +191,58 @@ class MathGenerationGraphTests(unittest.TestCase):
         self.assertEqual(lowered["difficulty"], 2)
         self.assertEqual(lowered["question_attempts"], 0)
 
-        conceptual = graph_mod.node_adapt_math_question_failure(
-            {
-                "card_route": "math_calculation",
-                "difficulty": 1,
-                "route_metadata": {"confidence": 0.7},
-                "question_failure_reason": "insufficient evidence",
-            }
-        )  # type: ignore[arg-type]
+        # The "default" route's own tracked difficulty (3) is unrelated to
+        # math_calculation's, which the retries above already drove down to 1 —
+        # falling back to conceptual must read the former, not carry the latter.
+        original_get_repo = graph_mod.get_repo
+
+        class FakeDB:
+            def get_topic_proficiency(self, *, user_id, exam_id, topic_id):
+                return StoredTopicProficiency(
+                    user_id=user_id,
+                    exam_id=exam_id,
+                    topic_id=topic_id,
+                    proficiency=1.0,
+                    current_difficulty=1,
+                    streak_up=0,
+                    streak_down=0,
+                    seen_count=0,
+                    correctish_count=0,
+                    last_updated_at="",
+                    info={
+                        "route_proficiency": {
+                            "default": {
+                                "difficulty_framework": "bloom",
+                                "current_difficulty": 3,
+                                "proficiency": 1.0,
+                                "streak_up": 0,
+                                "streak_down": 0,
+                                "seen_count": 4,
+                                "correctish_count": 4,
+                            }
+                        }
+                    },
+                )
+
+        try:
+            graph_mod.get_repo = lambda: FakeDB()  # type: ignore[assignment]
+            conceptual = graph_mod.node_adapt_math_question_failure(
+                {
+                    "card_route": "math_calculation",
+                    "difficulty": 1,
+                    "route_metadata": {"confidence": 0.7},
+                    "question_failure_reason": "insufficient evidence",
+                    "user_id": "u1",
+                    "exam_id": "e1",
+                    "topic_id": "t1",
+                }
+            )  # type: ignore[arg-type]
+        finally:
+            graph_mod.get_repo = original_get_repo  # type: ignore[assignment]
+
         self.assertEqual(conceptual["card_route"], "default")
         self.assertEqual(conceptual["difficulty_framework"], "bloom")
+        self.assertEqual(conceptual["difficulty"], 3)
         self.assertEqual(conceptual["route_metadata"]["math_kind"], "conceptual")
         self.assertEqual(conceptual["answer_attempts"], 0)
         self.assertEqual(conceptual["math_validation_fail_cycles"], 0)

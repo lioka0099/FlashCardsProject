@@ -48,6 +48,7 @@ from app.services.generation.cards import (
     pick_starter_topics,
 )
 from app.services.generation.context_packs import build_diverse_chunk_pack
+from app.services.review.topic_route_proficiency import difficulty_for_route
 from app.api.schemas import ProofSpan
 
 logger = logging.getLogger(__name__)
@@ -895,7 +896,17 @@ def node_adapt_math_question_failure(state: CardGenState) -> CardGenState:
         }
 
     framework = framework_for_route("default")
-    difficulty = clamp_difficulty(framework, state.get("difficulty") or 1)
+    # Read the "default" route's own tracked difficulty rather than carrying
+    # forward math_calculation's — it was likely driven down to 1 by the
+    # difficulty-lowering retries above and has nothing to do with how this
+    # topic's conceptual/default questions have actually been going.
+    difficulty = difficulty_for_route(
+        repo=get_repo(),
+        user_id=state["user_id"],
+        exam_id=state["exam_id"],
+        topic_id=state["topic_id"],
+        card_route="default",
+    )
     level = get_level(framework, difficulty)
     route_metadata = dict(state.get("route_metadata") or {})
     route_metadata.update(

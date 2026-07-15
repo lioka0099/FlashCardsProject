@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, asdict
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from app.services.generation.difficulty_frameworks import clamp_difficulty, framework_for_route
 
+if TYPE_CHECKING:
+    from app.data.db_repository import DBRepository
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_ROUTE = "default"
 MATH_ROUTE = "math_calculation"
@@ -146,3 +151,49 @@ def project_route_columns(
         correctish_count=total_correctish,
     )
 
+
+def difficulty_for_route(
+    *,
+    repo: "DBRepository",
+    user_id: str,
+    exam_id: str,
+    topic_id: str,
+    card_route: Optional[str],
+) -> int:
+    """
+    The difficulty a new card for this topic+route should use, read from that
+    route's own tracked state (not another route's, and not a value carried
+    over from a different route's failed attempt).
+    """
+    framework = framework_for_route(card_route)
+    prof = repo.get_topic_proficiency(user_id=user_id, exam_id=exam_id, topic_id=topic_id)
+    if prof is None:
+        return 1
+    if card_route == MATH_ROUTE:
+        fallback = default_route_state(card_route=MATH_ROUTE, current_difficulty=1)
+    elif card_route == "math_conceptual":
+        fallback = default_route_state(card_route="math_conceptual", current_difficulty=1)
+    else:
+        fallback = default_route_state(
+            card_route=DEFAULT_ROUTE,
+            proficiency=prof.proficiency,
+            current_difficulty=prof.current_difficulty,
+            streak_up=prof.streak_up,
+            streak_down=prof.streak_down,
+            seen_count=prof.seen_count,
+            correctish_count=prof.correctish_count,
+        )
+    route_state = route_state_from_info(info=prof.info or {}, card_route=card_route, fallback=fallback)
+    difficulty = clamp_difficulty(framework, route_state.current_difficulty)
+    logger.debug(
+        "Selected route-aware difficulty: exam_id=%s topic_id=%s route=%s "
+        "framework=%s difficulty=%s route_seen=%s route_correctish=%s",
+        exam_id,
+        topic_id,
+        card_route,
+        framework,
+        difficulty,
+        route_state.seen_count,
+        route_state.correctish_count,
+    )
+    return difficulty

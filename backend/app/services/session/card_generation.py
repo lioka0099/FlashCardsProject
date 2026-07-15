@@ -16,8 +16,7 @@ from app.services.generation.context_packs import build_diverse_chunk_pack
 from app.services.generation.graph import generate_single_card
 from app.services.generation.card_routing import classify_card_route
 from app.services.diagnostic.coverage import all_topics_diagnosed, diagnosed_topic_ids, undiagnosed_topics
-from app.services.generation.difficulty_frameworks import clamp_difficulty, framework_for_route
-from app.services.review.topic_route_proficiency import default_route_state, route_state_from_info
+from app.services.review.topic_route_proficiency import difficulty_for_route
 
 logger = logging.getLogger(__name__)
 
@@ -260,11 +259,12 @@ class SessionCardGenerationService:
                         card_route_override="math_conceptual",
                     )
             except Exception:
-                logger.exception(
+                logger.error(
                     "Failed to generate session card for exam %s topic %s",
                     exam_id,
                     choice.topic_id,
                 )
+                logger.debug("Traceback for the failure above:", exc_info=True)
                 continue
             if card is None:
                 continue
@@ -541,46 +541,13 @@ class SessionCardGenerationService:
         topic_id: str,
         card_route: str,
     ) -> int:
-        framework = framework_for_route(card_route)
-        prof = self.repo.get_topic_proficiency(
+        return difficulty_for_route(
+            repo=self.repo,
             user_id=user_id,
             exam_id=exam_id,
             topic_id=topic_id,
-        )
-        if prof is None:
-            return 1
-        if card_route == "math_calculation":
-            fallback = default_route_state(card_route="math_calculation", current_difficulty=1)
-        elif card_route == "math_conceptual":
-            fallback = default_route_state(card_route="math_conceptual", current_difficulty=1)
-        else:
-            fallback = default_route_state(
-                card_route="default",
-                proficiency=prof.proficiency,
-                current_difficulty=prof.current_difficulty,
-                streak_up=prof.streak_up,
-                streak_down=prof.streak_down,
-                seen_count=prof.seen_count,
-                correctish_count=prof.correctish_count,
-            )
-        route_state = route_state_from_info(
-            info=prof.info or {},
             card_route=card_route,
-            fallback=fallback,
         )
-        difficulty = clamp_difficulty(framework, route_state.current_difficulty)
-        logger.debug(
-            "Selected route-aware difficulty: exam_id=%s topic_id=%s route=%s "
-            "framework=%s difficulty=%s route_seen=%s route_correctish=%s",
-            exam_id,
-            topic_id,
-            card_route,
-            framework,
-            difficulty,
-            route_state.seen_count,
-            route_state.correctish_count,
-        )
-        return difficulty
 
     def _choose_card_with_topic_fairness(
         self,

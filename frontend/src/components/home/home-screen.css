@@ -63,14 +63,10 @@
 }
 
 .dash-brand__mark {
-  display: grid;
-  place-items: center;
-  width: 2.6rem;
-  height: 2.6rem;
-  border-radius: 14px;
-  background: var(--grad-p);
-  color: #fff;
-  box-shadow: var(--shadow-pop);
+  width: 3.4rem;
+  height: 3.4rem;
+  margin: -0.4rem 0;
+  object-fit: contain;
 }
 
 .dash-brand__name {

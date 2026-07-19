@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, LogOut, User } from "lucide-react";
 import { ExamHistorySidebar } from "@/components/home/exam-history-sidebar";
 import { UploadExamForm } from "@/components/home/upload-exam-form";
-import { logout } from "@/lib/api/auth";
+import { getMe, logout } from "@/lib/api/auth";
 import "@/components/home/home-screen.css";
 
 const DECK_NAME_INPUT_ID = "dash-deck-name";
@@ -15,6 +16,8 @@ export function HomeDashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement | null>(null);
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: getMe });
+  const firstName = me?.name?.trim().split(/\s+/)[0];
 
   useEffect(() => {
     if (!isAccountOpen) {
@@ -58,7 +61,9 @@ export function HomeDashboard() {
       <div className="dash-main">
         <header className="dash-top">
           <div>
-            <h1 className="dash-top__welcome">Welcome back! 👋</h1>
+            <h1 className="dash-top__welcome">
+              {firstName ? `Welcome back, ${firstName}! 👋` : "Welcome back! 👋"}
+            </h1>
             <p className="dash-top__sub">Let&rsquo;s turn documents into understanding.</p>
           </div>
 

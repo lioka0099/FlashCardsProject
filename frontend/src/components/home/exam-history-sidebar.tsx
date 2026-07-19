@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { Layers, Plus, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { InlineError } from "@/components/common/inline-error";
 import { listRecentExams, type ExamListItem } from "@/lib/api/client";
 import { mapHomeApiError } from "@/lib/api/ui-error";
@@ -93,9 +93,8 @@ export function ExamHistorySidebar({ className, onNavigate, onNewTest }: ExamHis
       aria-label="Test history sidebar"
     >
       <Link className="dash-brand" href="/" aria-label="Flashcards home">
-        <span className="dash-brand__mark" aria-hidden="true">
-          <Layers size={22} />
-        </span>
+        {/* eslint-disable-next-line @next/next/no-img-element -- small fixed-size logo, optimizer not needed */}
+        <img className="dash-brand__mark" src="/logo.png" alt="" aria-hidden="true" />
         <span>
           <span className="dash-brand__name">Flashcards</span>
           <span className="dash-brand__tag">AI-Powered Learning</span>

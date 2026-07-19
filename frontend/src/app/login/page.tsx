@@ -43,7 +43,8 @@ export default function LoginPage() {
     <main className="login">
       <form className="login__card" onSubmit={onSubmit}>
         <div className="login__brand">
-          <span className="login__brand-mark" aria-hidden />
+          {/* eslint-disable-next-line @next/next/no-img-element -- small fixed-size logo, optimizer not needed */}
+          <img className="login__brand-mark" src="/logo.png" alt="" aria-hidden />
           <span className="login__brand-name">FlashCards Studio</span>
         </div>
         <h1 className="login__title">{mode === "login" ? "Welcome back" : "Create your account"}</h1>

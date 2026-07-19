@@ -18,10 +18,12 @@
     "Segoe UI",
     sans-serif;
 
-  --background: #fff7ed;
-  --foreground: #172554;
-  --accent: #2563eb;
-  --danger: #e11d48;
+  /* Shared palette — matches the per-page design-system tokens
+     (--bg / --n900 / --grad-p purple / --danger). */
+  --background: #f7f7fb;
+  --foreground: #0f172a;
+  --accent: #6f42c1;
+  --danger: #ef4444;
 }
 
 *,

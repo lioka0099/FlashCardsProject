@@ -1,0 +1,116 @@
+/* Branded status screens (404 / error). Scoped palette mirrors the login and
+   home screens so these pages match the current design system. */
+
+.status {
+  --p: #6f42c1;
+  --p-strong: #5b34a8;
+  --n900: #0f172a;
+  --n500: #64748b;
+  --card: #ffffff;
+  --line: #ececf3;
+  --grad-p: linear-gradient(135deg, #6f42c1, #a78bfa);
+  --shadow-card: 0 18px 50px rgba(15, 23, 42, 0.07);
+  --shadow-pop: 0 14px 36px rgba(111, 66, 193, 0.18);
+
+  min-height: 100vh;
+  background: #f7f7fb;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1.25rem;
+}
+
+.status__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.6rem;
+  width: min(100%, 28rem);
+  padding: 2.5rem 2.25rem;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.status__brand-mark {
+  width: 4.5rem;
+  height: 4.5rem;
+  object-fit: contain;
+  margin-bottom: 0.25rem;
+}
+
+.status__code {
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: transparent;
+  background: var(--grad-p);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.status__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--n900);
+}
+
+.status__text {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+  color: var(--n500);
+}
+
+.status__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.status__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  cursor: pointer;
+  padding: 0.8rem 1.4rem;
+  border-radius: 12px;
+  background: var(--grad-p);
+  color: #fff;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--shadow-pop);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.status__btn:hover {
+  transform: translateY(-1px);
+  filter: saturate(1.05);
+}
+
+.status__btn--ghost {
+  background: none;
+  color: var(--p);
+  box-shadow: none;
+  border: 1px solid var(--line);
+}
+
+.status__btn--ghost:hover {
+  color: var(--p-strong);
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status__btn {
+    transition: none;
+  }
+}

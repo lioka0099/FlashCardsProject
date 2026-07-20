@@ -147,7 +147,12 @@ def me_endpoint(user_id: str = Depends(auth.get_current_user)):
         user = db.query(User).filter(User.user_id == user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        return {"user_id": user.user_id, "email": user.email, "name": user.name}
+        return {
+            "user_id": user.user_id,
+            "email": user.email,
+            "name": user.name,
+            "onboarded": user.onboarded_at is not None,
+        }
 
 
 @app.patch("/auth/me")
@@ -164,6 +169,23 @@ def update_profile_endpoint(req: UpdateProfileRequest, user_id: str = Depends(au
             user.name = req.name
         db.flush()
         return {"user_id": user.user_id, "email": user.email, "name": user.name}
+
+
+@app.post("/auth/me/onboarded")
+def mark_onboarded_endpoint(user_id: str = Depends(auth.get_current_user)):
+    with get_db() as db:
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if user.onboarded_at is None:
+            user.onboarded_at = datetime.utcnow()
+        db.flush()
+        return {
+            "user_id": user.user_id,
+            "email": user.email,
+            "name": user.name,
+            "onboarded": user.onboarded_at is not None,
+        }
 
 
 @app.post("/auth/change-password")

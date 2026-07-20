@@ -1,0 +1,98 @@
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.tour__spotlight {
+  position: fixed;
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 9999px rgba(15, 23, 42, 0.62),
+    0 0 0 3px var(--brand, #6366f1);
+  pointer-events: none;
+  transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease;
+}
+
+.tour__catch {
+  position: fixed;
+  inset: 0;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.tour__tooltip {
+  position: fixed;
+  z-index: 1001;
+  max-width: 320px;
+  pointer-events: auto;
+  background: var(--card, #ffffff);
+  color: var(--text, #0f172a);
+  border: 1px solid var(--line, rgba(148, 163, 184, 0.3));
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow-card, 0 12px 34px rgba(15, 23, 42, 0.22));
+}
+
+.tour__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.tour__body {
+  margin: 0 0 0.9rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  opacity: 0.85;
+}
+
+.tour__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.tour__nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tour__count {
+  font-size: 0.78rem;
+  opacity: 0.6;
+}
+
+.tour__skip {
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 0.85rem;
+  color: inherit;
+  opacity: 0.65;
+  cursor: pointer;
+}
+
+.tour__skip:hover {
+  opacity: 1;
+}
+
+.tour__btn {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--line, rgba(148, 163, 184, 0.4));
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tour__btn--primary {
+  border-color: transparent;
+  background: var(--brand, #6366f1);
+  color: #ffffff;
+}

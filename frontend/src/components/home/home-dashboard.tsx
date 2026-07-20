@@ -74,6 +74,7 @@ export function HomeDashboard() {
               aria-haspopup="menu"
               aria-expanded={isAccountOpen}
               onClick={() => setIsAccountOpen((open) => !open)}
+              data-tour="account"
             >
               <span className="dash-account__avatar" aria-hidden="true">
                 <User size={18} />

@@ -218,6 +218,7 @@ export function UploadExamForm({
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Enter test name..."
+              data-tour="deck-name"
             />
 
             {uploadError ? (
@@ -252,6 +253,7 @@ export function UploadExamForm({
               className={`dash-drop${isDragActive ? " dash-drop--active" : ""}`}
               role="button"
               tabIndex={0}
+              data-tour="upload"
               onClick={() => filesInputRef.current?.click()}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {

@@ -91,6 +91,7 @@ export function ExamHistorySidebar({ className, onNavigate, onNewTest }: ExamHis
       id="home-sidebar"
       className={className}
       aria-label="Test history sidebar"
+      data-tour="my-tests"
     >
       <Link className="dash-brand" href="/" aria-label="Flashcards home">
         {/* eslint-disable-next-line @next/next/no-img-element -- small fixed-size logo, optimizer not needed */}

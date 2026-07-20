@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type PropsWithChildren,
 } from "react";
@@ -28,13 +29,17 @@ export function OnboardingTourProvider({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
   const [active, setActive] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  // Once the tour is finished/skipped this session, never auto-start it again.
+  // `me.onboarded` updates asynchronously (or not at all if the write fails), so
+  // the auto-start effect can't rely on it alone without re-opening the tour.
+  const dismissedRef = useRef(false);
 
   // Guests get a 401 here -> query stays in error, me is undefined, no auto-start.
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: getMe, retry: false });
 
   // Auto-start once for a brand-new account landing on the dashboard.
   useEffect(() => {
-    if (!active && me && me.onboarded === false && pathname === "/") {
+    if (!active && !dismissedRef.current && me && me.onboarded === false && pathname === "/") {
       setStepIndex(0);
       setActive(true);
     }
@@ -50,6 +55,7 @@ export function OnboardingTourProvider({ children }: PropsWithChildren) {
   }, [step, pathname, router]);
 
   const finish = useCallback(async () => {
+    dismissedRef.current = true;
     setActive(false);
     setStepIndex(0);
     try {
@@ -76,6 +82,7 @@ export function OnboardingTourProvider({ children }: PropsWithChildren) {
   }, []);
 
   const startTour = useCallback(() => {
+    dismissedRef.current = false;
     setStepIndex(0);
     setActive(true);
     router.push("/");

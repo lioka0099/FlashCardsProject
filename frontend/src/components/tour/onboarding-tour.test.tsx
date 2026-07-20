@@ -63,4 +63,17 @@ describe("OnboardingTourProvider", () => {
     (await screen.findByRole("button", { name: "Skip" })).click();
     await waitFor(() => expect(markOnboarded).toHaveBeenCalled());
   });
+
+  it("stays closed after skip even when the onboarded write fails", async () => {
+    // If markOnboarded rejects, `me.onboarded` never flips to true — so the
+    // auto-start effect would re-open the tour forever without a session guard.
+    getMe.mockResolvedValue({ user_id: "u", email: null, name: null, onboarded: false });
+    markOnboarded.mockRejectedValue(new Error("network"));
+    renderWithClient();
+    (await screen.findByRole("button", { name: "Skip" })).click();
+    await waitFor(() => expect(markOnboarded).toHaveBeenCalled());
+    // Give the auto-start effect several ticks to (not) re-fire, then assert closed.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
 });

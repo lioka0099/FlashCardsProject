@@ -131,7 +131,7 @@ export function FlashcardPlayer({
           Previous
         </button>
 
-        <div className="card-shell">
+        <div className="card-shell" data-tour="flashcard">
           <motion.article
             animate={cardControls}
             className={`card-face${displayedAnswerVisible ? " card-face--back" : " card-face--front"}`}

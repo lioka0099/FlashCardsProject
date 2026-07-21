@@ -101,7 +101,7 @@ export function ExamHistorySidebar({ className, onNavigate, onNewTest }: ExamHis
         </span>
       </Link>
 
-      <div className="dash-side__head">
+      <div className="dash-side__head" data-tour="my-tests">
         <h2 className="dash-side__title">My Tests</h2>
         <button className="dash-newtest" type="button" onClick={onNewTest}>
           <Plus size={16} />

@@ -187,6 +187,7 @@ def _apply_sqlite_compat_migrations() -> None:
     }
     required_user_columns = {
         "password_hash": "ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)",
+        "onboarded_at": "ALTER TABLE users ADD COLUMN onboarded_at DATETIME",
     }
 
     with engine.begin() as conn:

@@ -53,7 +53,7 @@ export function RatingControls({
     : null;
 
   return (
-    <div className="rate-wrap">
+    <div className="rate-wrap" data-tour="rating">
       {!selectedOption ? <p className="rate-prompt">How well did you know this?</p> : null}
       <div
         className={`rate${selectedOption ? " rate--single" : ""}`}

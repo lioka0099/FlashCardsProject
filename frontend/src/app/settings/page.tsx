@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { changePassword, getMe, updateMe } from "@/lib/api/auth";
 import { ApiRequestError } from "@/lib/api/client";
+import { ReplayWalkthroughCard } from "@/app/settings/replay-button";
 import "./settings.css";
 
 export default function SettingsPage() {
@@ -112,6 +113,8 @@ export default function SettingsPage() {
             </button>
           </form>
         </div>
+
+        <ReplayWalkthroughCard />
       </div>
     </section>
   );

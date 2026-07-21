@@ -72,6 +72,7 @@ class User(Base):
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    onboarded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     exams: Mapped[List["Exam"]] = relationship("Exam", back_populates="user")

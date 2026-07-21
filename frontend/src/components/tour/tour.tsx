@@ -49,7 +49,10 @@ export function Tour({ steps, stepIndex, onNext, onBack, onSkip, onFinish }: Tou
     const tick = () => {
       const el = document.querySelector(step.target);
       if (el) {
-        el.scrollIntoView?.({ behavior: "smooth", block: "center" });
+        // Instant (not smooth) so the rect we read below is the settled
+        // position — a smooth scroll would still be animating and freeze the
+        // spotlight at the pre-scroll spot.
+        el.scrollIntoView?.({ block: "center" });
         const r = el.getBoundingClientRect();
         if (r.width > 0 && r.height > 0) {
           setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
@@ -76,10 +79,12 @@ export function Tour({ steps, stepIndex, onNext, onBack, onSkip, onFinish }: Tou
       const r = el.getBoundingClientRect();
       setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
     }
-    window.addEventListener("scroll", reposition, { passive: true });
+    // capture:true so scrolls inside an inner overflow container (the dashboard
+    // scrolls a panel, not the window) still reposition the spotlight.
+    window.addEventListener("scroll", reposition, { passive: true, capture: true });
     window.addEventListener("resize", reposition);
     return () => {
-      window.removeEventListener("scroll", reposition);
+      window.removeEventListener("scroll", reposition, { capture: true });
       window.removeEventListener("resize", reposition);
     };
   }, [step]);

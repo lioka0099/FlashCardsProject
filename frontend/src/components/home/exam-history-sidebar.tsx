@@ -91,7 +91,6 @@ export function ExamHistorySidebar({ className, onNavigate, onNewTest }: ExamHis
       id="home-sidebar"
       className={className}
       aria-label="Test history sidebar"
-      data-tour="my-tests"
     >
       <Link className="dash-brand" href="/" aria-label="Flashcards home">
         {/* eslint-disable-next-line @next/next/no-img-element -- small fixed-size logo, optimizer not needed */}
@@ -102,7 +101,7 @@ export function ExamHistorySidebar({ className, onNavigate, onNewTest }: ExamHis
         </span>
       </Link>
 
-      <div className="dash-side__head">
+      <div className="dash-side__head" data-tour="my-tests">
         <h2 className="dash-side__title">My Tests</h2>
         <button className="dash-newtest" type="button" onClick={onNewTest}>
           <Plus size={16} />

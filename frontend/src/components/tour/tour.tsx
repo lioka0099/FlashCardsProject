@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import "./tour.css";
 
@@ -28,8 +28,17 @@ export function Tour({ steps, stepIndex, onNext, onBack, onSkip, onFinish }: Tou
   const step = steps[stepIndex];
   const [rect, setRect] = useState<Rect | null>(null);
   const [mounted, setMounted] = useState(false);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [tipH, setTipH] = useState(0);
 
   useEffect(() => setMounted(true), []);
+
+  // Measure the tooltip so its top can be clamped fully into the viewport.
+  useLayoutEffect(() => {
+    if (tooltipRef.current) {
+      setTipH(tooltipRef.current.offsetHeight);
+    }
+  }, [rect, stepIndex]);
 
   // Locate the target; poll briefly if it isn't rendered yet, else auto-skip.
   useEffect(() => {
@@ -90,11 +99,16 @@ export function Tour({ steps, stepIndex, onNext, onBack, onSkip, onFinish }: Tou
   const isFirst = stepIndex === 0;
   const advance = () => (isLast ? onFinish() : onNext());
 
+  // Keep the tooltip fully on-screen: clamp both axes into the viewport so a
+  // right-aligned or full-height target can't push it out of view. Prefer below
+  // the target; fall back to above; then clamp using the measured tooltip height.
+  const TOOLTIP_W = 320;
+  const left = Math.min(Math.max(12, rect.left), window.innerWidth - TOOLTIP_W - 12);
   const spaceBelow = window.innerHeight - (rect.top + rect.height);
-  const placeBelow = spaceBelow > 220;
-  const tooltipStyle: CSSProperties = placeBelow
-    ? { top: rect.top + rect.height + 12, left: Math.max(12, rect.left) }
-    : { top: Math.max(12, rect.top - 12), left: Math.max(12, rect.left), transform: "translateY(-100%)" };
+  const placeBelow = spaceBelow > tipH + 24;
+  const preferredTop = placeBelow ? rect.top + rect.height + 12 : rect.top - tipH - 12;
+  const top = Math.min(Math.max(12, preferredTop), Math.max(12, window.innerHeight - tipH - 12));
+  const tooltipStyle: CSSProperties = { top, left };
 
   return createPortal(
     <div className="tour" role="dialog" aria-modal="true" aria-label={step.title}>
@@ -108,7 +122,7 @@ export function Tour({ steps, stepIndex, onNext, onBack, onSkip, onFinish }: Tou
         }}
       />
       <div className="tour__catch" onClick={advance} />
-      <div className="tour__tooltip" style={tooltipStyle}>
+      <div className="tour__tooltip" ref={tooltipRef} style={tooltipStyle}>
         <h2 className="tour__title">{step.title}</h2>
         <p className="tour__body">{step.body}</p>
         <div className="tour__row">

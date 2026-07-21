@@ -238,6 +238,7 @@ export function UploadExamForm({
               className="dash-submit"
               type="submit"
               disabled={!hasFiles || !hasTitle || uploadMutation.isPending}
+              data-tour="create"
             >
               <Sparkles size={18} />
               {uploadMutation.isPending ? "Creating…" : "Create Test"}

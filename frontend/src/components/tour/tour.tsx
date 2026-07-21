@@ -40,54 +40,43 @@ export function Tour({ steps, stepIndex, onNext, onBack, onSkip, onFinish }: Tou
     }
   }, [rect, stepIndex]);
 
-  // Locate the target; poll briefly if it isn't rendered yet, else auto-skip.
+  // Track the target every frame so the spotlight stays glued to it through
+  // scrolls (incl. inner containers), entrance/flip animations, and resizes —
+  // any of which move the element after a one-shot measurement. Poll briefly for
+  // a not-yet-rendered target, then auto-skip if it never appears.
   useEffect(() => {
     if (!step) return;
     let raf = 0;
     let elapsed = 0;
+    let scrolledIntoView = false;
     setRect(null);
     const tick = () => {
       const el = document.querySelector(step.target);
-      if (el) {
-        // Instant (not smooth) so the rect we read below is the settled
-        // position — a smooth scroll would still be animating and freeze the
-        // spotlight at the pre-scroll spot.
-        el.scrollIntoView?.({ block: "center" });
-        const r = el.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0) {
-          setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+      const r = el?.getBoundingClientRect();
+      if (r && r.width > 0 && r.height > 0) {
+        if (!scrolledIntoView) {
+          // Instant (not smooth) so the very next frame reads the settled spot.
+          el!.scrollIntoView?.({ block: "center" });
+          scrolledIntoView = true;
+        }
+        setRect((prev) =>
+          prev && prev.top === r.top && prev.left === r.left && prev.width === r.width && prev.height === r.height
+            ? prev
+            : { top: r.top, left: r.left, width: r.width, height: r.height },
+        );
+      } else if (!scrolledIntoView) {
+        // Still waiting for the target to render.
+        elapsed += 16;
+        if (elapsed >= FIND_BUDGET_MS) {
+          onNext();
           return;
         }
-      }
-      elapsed += 16;
-      if (elapsed >= FIND_BUDGET_MS) {
-        onNext();
-        return;
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [step, onNext]);
-
-  // Keep the spotlight aligned while scrolling/resizing.
-  useEffect(() => {
-    if (!step) return;
-    function reposition() {
-      const el = document.querySelector(step.target);
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-    }
-    // capture:true so scrolls inside an inner overflow container (the dashboard
-    // scrolls a panel, not the window) still reposition the spotlight.
-    window.addEventListener("scroll", reposition, { passive: true, capture: true });
-    window.addEventListener("resize", reposition);
-    return () => {
-      window.removeEventListener("scroll", reposition, { capture: true });
-      window.removeEventListener("resize", reposition);
-    };
-  }, [step]);
 
   // Escape = skip.
   useEffect(() => {

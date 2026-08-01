@@ -180,6 +180,14 @@ class ExamRepo:
                 return "missing"
             if ok:
                 row.job_status = "done"
+            elif row.state == "failed":
+                # run_bootstrap's own except block already recorded the real
+                # bootstrap_error and marked the exam terminally failed before
+                # re-raising; the frontend stops polling the moment it sees
+                # this state. Retrying past this point can only re-hit
+                # ImmutableExamError (documents are already attached) and
+                # overwrite the real error with a misleading one.
+                row.job_status = "failed"
             else:
                 row.job_status = "failed" if int(row.job_attempts or 0) >= MAX_JOB_ATTEMPTS else "queued"
             return row.job_status

@@ -54,6 +54,23 @@ def test_finish_failure_retries_then_fails():
     assert repo.finish_job(exam_id=exam_id, ok=False, error="boom") == "failed"
 
 
+def test_finish_failure_does_not_retry_once_exam_marked_failed():
+    # Mirrors run_bootstrap's own except block: it sets exam.state="failed"
+    # with the real error before re-raising, then job_worker calls finish_job.
+    # A retry past this point can only re-hit ImmutableExamError (documents
+    # are already attached) and overwrite the real bootstrap_error the
+    # frontend already stopped polling for -- so finish_job must not requeue.
+    repo = _repo()
+    exam_id, _ = _seed_exam(exam_id="ex-job-4")
+    repo.enqueue_job(exam_id=exam_id, payload={})
+    repo.claim_next_job()
+    repo.update_exam_lifecycle(
+        exam_id=exam_id, state="failed", info_patch={"bootstrap_error": "real cause"}
+    )
+
+    assert repo.finish_job(exam_id=exam_id, ok=False, error="ImmutableExamError") == "failed"
+
+
 def test_stale_running_job_is_reclaimed():
     repo = _repo()
     exam_id, _ = _seed_exam(exam_id="ex-job-3")

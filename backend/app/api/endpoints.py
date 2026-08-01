@@ -209,8 +209,8 @@ def _immutable_exam_error_payload(*, exam_id: Optional[str] = None, message: str
 
 
 def _extract_uploaded_files(files: List[UploadFile]) -> tuple[List[Path], List[str]]:
-    uploads = Path("uploads")
-    uploads.mkdir(exist_ok=True)
+    uploads = Path(os.getenv("UPLOAD_DIR", "uploads"))
+    uploads.mkdir(parents=True, exist_ok=True)
     temp_paths: List[Path] = []
     filenames: List[str] = []
     for file in files:

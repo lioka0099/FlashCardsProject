@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import os
 import shutil
 import uuid
 from dataclasses import dataclass
@@ -61,10 +62,12 @@ def _detect_loader(path: str):
 def _persist_source_file(
     src_path: str,
     doc_id: str,
-    dest_dir: Path = Path("uploads/documents"),
+    dest_dir: Optional[Path] = None,
 ) -> str:
     """Copy the uploaded file to a doc_id-keyed path so it survives the
     worker's temp-file cleanup. Returns the absolute destination path."""
+    if dest_dir is None:
+        dest_dir = Path(os.getenv("UPLOAD_DIR", "uploads")) / "documents"
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / f"{doc_id}{Path(src_path).suffix.lower()}"
     shutil.copyfile(src_path, dest)

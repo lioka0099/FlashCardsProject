@@ -2,6 +2,7 @@ import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from app.services.corpus.ingestion import _persist_source_file
 
@@ -29,6 +30,21 @@ class PersistSourceFileTests(unittest.TestCase):
             src.write_text("hello")
             persisted = _persist_source_file(str(src), "doc999", dest_dir=Path(tmp) / "documents")
             self.assertTrue(Path(persisted).is_absolute())
+
+    def test_dest_dir_defaults_to_upload_dir_env_var(self):
+        with TemporaryDirectory() as tmp:
+            src_dir = Path(tmp) / "src"
+            src_dir.mkdir()
+            src = src_dir / "notes.txt"
+            src.write_text("hello")
+            upload_dir = Path(tmp) / "configured_uploads"
+
+            with mock.patch.dict(os.environ, {"UPLOAD_DIR": str(upload_dir)}):
+                persisted = _persist_source_file(str(src), "envtest01")
+
+            expected = upload_dir / "documents" / "envtest01.txt"
+            self.assertEqual(Path(persisted), expected.resolve())
+            self.assertTrue(expected.exists())
 
 
 if __name__ == "__main__":

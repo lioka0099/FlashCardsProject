@@ -36,3 +36,13 @@ def test_from_upload_rejects_unsupported_type_synchronously():
     data = {"user_id": "u-ep2", "title": "X", "mode": "mastery"}
     r = client.post("/exams/from-upload", files=files, data=data)
     assert r.status_code == 422
+
+
+def test_upload_writes_to_upload_dir_env_var(monkeypatch, tmp_path):
+    init_db()
+    monkeypatch.setenv("UPLOAD_DIR", str(tmp_path))
+    files = {"files": ("envtest.txt", io.BytesIO(b"hello"), "text/plain")}
+    data = {"user_id": "u-ep3", "title": "EnvTest", "mode": "mastery"}
+    r = client.post("/exams/from-upload", files=files, data=data)
+    assert r.status_code == 200, r.text
+    assert (tmp_path / "envtest.txt").exists()

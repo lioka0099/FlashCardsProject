@@ -332,7 +332,6 @@ All endpoints except `/auth/register` and `/auth/login` require `Authorization: 
   matrix, limit, and summation problem types — anything outside that set is marked `unsupported` rather
   than silently approved.
 - No CI pipeline is configured yet; tests are run locally (`pytest`, `vitest`).
-- No hosted/public deployment link yet — update this section once the app is live.
 
 ## Contributors
 

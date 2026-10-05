@@ -29,6 +29,7 @@ trusting the model.
 - [License](#license)
 
 ## Demo
+-**Link to deployed project:** https://flashcards-project-lior-almog.vercel.app/
 
 https://github.com/user-attachments/assets/702ee5d7-03bf-47cb-bef4-01105853d2c9
 
